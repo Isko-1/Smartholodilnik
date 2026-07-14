@@ -1,0 +1,110 @@
+:root {
+  --navy: #14213D;
+  --cognac: #A6672C;
+  --cognac-dark: #7A4B1F;
+  --bone: #F5EFE6;
+  --bone-dark: #EAE1D2;
+  --terracotta: #BC4B34;
+}
+
+html, body {
+  background-color: var(--bone);
+  font-family: 'Manrope', system-ui, sans-serif;
+  color: var(--navy);
+}
+
+.font-display {
+  font-family: 'Fraunces', Georgia, serif;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Тонкая текстура шва холодильной полки в шапке */
+.shelf-seam {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 6px,
+    rgba(20, 33, 61, 0.06) 6px,
+    rgba(20, 33, 61, 0.06) 7px
+  );
+}
+
+.modal-panel {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+@keyframes ping-once {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  80% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.animate-ping-once {
+  animation: ping-once 0.8s ease-out;
+}
+
+/* Скрываем нативный скролл-бар в модалке рецептов, оставляя скролл */
+#recipe-results {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cognac) transparent;
+}
+#recipe-results::-webkit-scrollbar {
+  width: 6px;
+}
+#recipe-results::-webkit-scrollbar-thumb {
+  background-color: var(--cognac);
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------------------
+   Tilt-card эффект (наклон карточки под курсором + мягкий блик), аналог
+   TiltCard из unlumen-ui, но на чистом CSS/JS без React — см. app.js,
+   функции attachTiltEffect() / handleTiltMove().
+--------------------------------------------------------------------------- */
+.tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+  will-change: transform;
+  position: relative;
+}
+.tilt-card.tilt-active {
+  transition: transform 0.06s linear;
+  box-shadow: 0 18px 34px -12px rgba(20, 33, 61, 0.28);
+  z-index: 5;
+}
+.tilt-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  background: radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 50%), rgba(255,255,255,0.55), transparent 55%);
+  transition: opacity 0.25s ease;
+}
+.tilt-card.tilt-active .tilt-glare {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce), (hover: none) {
+  .tilt-card, .tilt-card.tilt-active {
+    transform: none !important;
+    transition: none !important;
+  }
+  .tilt-glare { display: none; }
+}
+
+/* Фокус-стейты для доступности с клавиатуры */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--cognac);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
