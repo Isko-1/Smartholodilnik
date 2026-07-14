@@ -1,4 +1,0 @@
-const SUPABASE_CONFIG = {
-  url: "",       // например: "https://jlfvsjibqiieiuvevfqn.supabase.co/rest/v1/"
-  anonKey: ""    // например: "sb_publishable_A_nUW50CayqQXxzGB3DpfQ_CFrfZbm2"
-};
