@@ -25,7 +25,10 @@
           "bone-dark": "#EAE1D2",
           terracotta: "#BC4B34",
           sage: "#6E9075",
-          amber: "#D6A24C"
+          amber: "#D6A24C",
+          plum: "#6B4C7A",
+          "plum-dark": "#4E3759",
+          "plum-light": "#EFE3F3"
         },
         fontFamily: {
           display: ["Fraunces", "Georgia", "serif"],
@@ -46,7 +49,7 @@
 
 <link rel="stylesheet" href="styles.css">
 </head>
-<body class="min-h-screen bg-bone text-navy antialiased pb-28">
+<body class="min-h-screen bg-bone text-navy antialiased pb-40">
 
 <!-- Banner: режим работы (демо / бэкенд / ошибка подключения) -->
 <div id="mode-banner" class="hidden text-xs sm:text-sm px-4 py-2.5 text-center font-medium"></div>
@@ -65,12 +68,6 @@
     </div>
     <div class="flex items-center gap-3 shrink-0">
       <div id="family-members" class="flex items-center"></div>
-      <div id="account-control" class="hidden items-center gap-2 pl-3 border-l border-bone-dark">
-        <span id="account-email" class="hidden sm:inline text-xs text-navy/45 max-w-[140px] truncate"></span>
-        <button id="account-logout-btn" title="Выйти из аккаунта" class="text-navy/40 hover:text-terracotta transition-colors p-1.5">
-          <i data-lucide="log-out" class="w-4 h-4"></i>
-        </button>
-      </div>
     </div>
   </div>
 </header>
@@ -201,7 +198,9 @@
   </div>
 </div>
 
-<main class="max-w-3xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
+<main class="max-w-3xl mx-auto px-4 sm:px-6 pt-6">
+
+<div id="page-home" class="space-y-6">
 
   <!-- Stats -->
   <section class="grid grid-cols-3 gap-3">
@@ -246,6 +245,60 @@
       </button>
     </form>
     <p id="shelf-life-hint" class="text-xs text-navy/45 mt-2"></p>
+  </section>
+
+  <!-- Fridge -->
+  <section>
+    <h2 class="font-display font-semibold text-base mb-3 flex items-center gap-2">
+      <i data-lucide="layers" class="w-4.5 h-4.5 text-cognac"></i>
+      Ваш холодильник
+    </h2>
+    <div id="fridge-grid" class="space-y-2.5"></div>
+    <div id="empty-state" class="hidden text-center py-12 border border-dashed border-bone-dark rounded-2xl">
+      <i data-lucide="refrigerator" class="w-9 h-9 mx-auto text-navy/25 mb-2"></i>
+      <p class="text-navy/50 text-sm">Холодильник пуст — добавьте первый продукт выше</p>
+    </div>
+  </section>
+
+</div>
+<!-- /page-home -->
+
+<!-- Page: Избранное (сохранённые рецепты) -->
+<div id="page-favorites" class="hidden space-y-4 pb-2">
+  <h1 class="font-display font-semibold text-xl flex items-center gap-2">
+    <i data-lucide="heart" class="w-5 h-5 text-plum"></i>
+    Избранные рецепты
+  </h1>
+  <p class="text-sm text-navy/50 -mt-2">Рецепты, которые вы сохранили из подборки «Что приготовить?»</p>
+  <div id="favorites-list" class="space-y-2.5"></div>
+  <div id="favorites-empty" class="hidden text-center py-12 border border-dashed border-bone-dark rounded-2xl">
+    <i data-lucide="heart" class="w-9 h-9 mx-auto text-navy/25 mb-2"></i>
+    <p class="text-navy/50 text-sm">Пока пусто — нажмите на сердечко у понравившегося рецепта</p>
+  </div>
+</div>
+<!-- /page-favorites -->
+
+<!-- Page: Профиль (аккаунт + семейный доступ) -->
+<div id="page-profile" class="hidden space-y-4 pb-2">
+  <h1 class="font-display font-semibold text-xl flex items-center gap-2">
+    <i data-lucide="user-circle" class="w-5 h-5 text-plum"></i>
+    Профиль
+  </h1>
+
+  <!-- Аккаунт -->
+  <section class="bg-white/70 border border-bone-dark rounded-2xl p-4 sm:p-5 flex items-center gap-3">
+    <div class="w-11 h-11 shrink-0 rounded-full bg-plum-light flex items-center justify-center">
+      <i data-lucide="user" class="w-5 h-5 text-plum-dark"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="font-display font-semibold text-navy leading-tight">Ваш аккаунт</p>
+      <span id="account-email" class="text-xs text-navy/50 truncate block mt-0.5">Локальный демо-режим</span>
+    </div>
+    <div id="account-control" class="hidden items-center">
+      <button id="account-logout-btn" title="Выйти из аккаунта" class="text-navy/40 hover:text-terracotta transition-colors p-2 rounded-lg hover:bg-terracotta/10">
+        <i data-lucide="log-out" class="w-4.5 h-4.5"></i>
+      </button>
+    </div>
   </section>
 
   <!-- Family access: локальный демо-режим (переключатель-симуляция) -->
@@ -300,25 +353,33 @@
       </div>
     </div>
   </section>
+</div>
+<!-- /page-profile -->
 
-  <!-- Fridge -->
-  <section>
-    <h2 class="font-display font-semibold text-base mb-3 flex items-center gap-2">
-      <i data-lucide="layers" class="w-4.5 h-4.5 text-cognac"></i>
-      Ваш холодильник
-    </h2>
-    <div id="fridge-grid" class="space-y-2.5"></div>
-    <div id="empty-state" class="hidden text-center py-12 border border-dashed border-bone-dark rounded-2xl">
-      <i data-lucide="refrigerator" class="w-9 h-9 mx-auto text-navy/25 mb-2"></i>
-      <p class="text-navy/50 text-sm">Холодильник пуст — добавьте первый продукт выше</p>
-    </div>
-  </section>
 </main>
+
+<!-- Bottom navigation -->
+<nav id="bottom-nav" class="fixed bottom-0 inset-x-0 z-30 bg-bone/95 backdrop-blur border-t border-bone-dark">
+  <div class="max-w-3xl mx-auto grid grid-cols-3 h-[70px]">
+    <button type="button" class="nav-button" data-page="home" aria-current="page">
+      <span class="nav-icon-frame"><i data-lucide="refrigerator" class="w-5 h-5"></i></span>
+      <span class="nav-label">Холодильник</span>
+    </button>
+    <button type="button" class="nav-button" data-page="favorites">
+      <span class="nav-icon-frame"><i data-lucide="heart" class="w-5 h-5"></i></span>
+      <span class="nav-label">Избранное</span>
+    </button>
+    <button type="button" class="nav-button" data-page="profile">
+      <span class="nav-icon-frame"><i data-lucide="user" class="w-5 h-5"></i></span>
+      <span class="nav-label">Профиль</span>
+    </button>
+  </div>
+</nav>
 
 <!-- Floating action button -->
 <button
   id="cook-btn"
-  class="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 bg-terracotta hover:bg-terracotta/90 text-bone font-semibold text-sm rounded-full pl-5 pr-6 py-3.5 flex items-center gap-2 shadow-lg shadow-terracotta/25 transition-transform active:scale-95"
+  class="fixed bottom-[86px] left-1/2 -translate-x-1/2 z-40 bg-terracotta hover:bg-terracotta/90 text-bone font-semibold text-sm rounded-full pl-5 pr-6 py-3.5 flex items-center gap-2 shadow-lg shadow-terracotta/25 transition-transform active:scale-95"
 >
   <i data-lucide="chef-hat" class="w-5 h-5"></i>
   Что приготовить?

@@ -5,6 +5,8 @@
   --bone: #F5EFE6;
   --bone-dark: #EAE1D2;
   --terracotta: #BC4B34;
+  --plum: #6B4C7A;
+  --plum-light: #EFE3F3;
 }
 
 html, body {
@@ -92,6 +94,60 @@ html, body {
     transition: none !important;
   }
   .tilt-glare { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Нижняя навигация: активная иконка мягко "всплывает" в цветной капсуле —
+   упрощённый vanilla-аналог nav-icon-frame эффекта (translateY + scale).
+--------------------------------------------------------------------------- */
+.nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: rgba(20, 33, 61, 0.42);
+  transition: color 0.22s ease;
+}
+.nav-icon-frame {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  transform: translateY(0) scale(1);
+  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease;
+}
+.nav-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  opacity: 0.85;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+}
+.nav-button[aria-current="page"] {
+  color: var(--plum, #6B4C7A);
+}
+.nav-button[aria-current="page"] .nav-icon-frame {
+  background: var(--plum-light, #EFE3F3);
+  transform: translateY(-12px) scale(1.08);
+  box-shadow: 0 10px 18px -8px rgba(107, 76, 122, 0.55);
+}
+.nav-button[aria-current="page"] .nav-label {
+  transform: translateY(-6px);
+}
+.nav-button:active .nav-icon-frame {
+  transform: translateY(-12px) scale(0.94);
+}
+
+/* Сердечко "в избранное": лёгкий пружинный поп при добавлении */
+@keyframes heart-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.fav-btn.is-fav i {
+  animation: heart-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Фокус-стейты для доступности с клавиатуры */

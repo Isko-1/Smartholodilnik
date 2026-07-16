@@ -16,6 +16,7 @@ const CATEGORIES = {
 
 const STORAGE_KEY = "smart-fridge-products";       // локальный демо-режим
 const FAMILY_KEY = "smart-fridge-family-sync";     // локальный демо-режим (переключатель)
+const FAVORITES_KEY = "smart-fridge-favorite-recipes"; // избранные рецепты (обе схемы бэкенда)
 // В режиме реального бэкенда семья и имя больше не хранятся в localStorage:
 // принадлежность к семье определяется записью в household_members,
 // привязанной к настоящему auth.uid() пользователя (email+пароль или Google),
@@ -226,7 +227,7 @@ function renderGrid() {
     const meta = STATUS_META[status];
 
     const card = document.createElement("div");
-    card.className = "group relative flex items-stretch bg-white/80 rounded-2xl shadow-sm border border-bone-dark overflow-hidden hover:shadow-md transition-shadow";
+    card.className = "group relative flex items-stretch bg-white/80 rounded-2xl shadow-sm border border-bone-dark overflow-hidden hover:bg-bone-dark/70 hover:border-navy/25 hover:shadow-lg transition-all duration-200";
 
     const dayLabel = daysLeft < 0
       ? `Просрочен на ${Math.abs(daysLeft)} дн.`
@@ -600,6 +601,88 @@ function initBackendOnboarding() {
 }
 
 // ---------------------------------------------------------------------------
+// Избранные рецепты (страница «Избранное»)
+// ---------------------------------------------------------------------------
+function loadFavoriteRecipes() {
+  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY)) || []; }
+  catch (e) { return []; }
+}
+
+function saveFavoriteRecipes(list) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+}
+
+function isFavoriteRecipe(id) {
+  return loadFavoriteRecipes().some(r => String(r.id) === String(id));
+}
+
+function toggleFavoriteRecipe(recipe) {
+  const list = loadFavoriteRecipes();
+  const idx = list.findIndex(r => String(r.id) === String(recipe.id));
+  if (idx >= 0) list.splice(idx, 1);
+  else list.push(recipe);
+  saveFavoriteRecipes(list);
+  return idx < 0; // true, если рецепт только что добавили
+}
+
+function favoriteBtnHtml(id, filled) {
+  return `
+    <button type="button" class="fav-btn shrink-0 p-1.5 -m-1.5 rounded-full transition-colors ${filled ? "is-fav text-terracotta" : "text-navy/25 hover:text-terracotta/70"}" data-fav-id="${id}" title="В избранное">
+      <i data-lucide="heart" class="w-4.5 h-4.5" ${filled ? 'fill="currentColor"' : ""}></i>
+    </button>`;
+}
+
+function renderFavoritesPage() {
+  const list = loadFavoriteRecipes();
+  const wrap = document.getElementById("favorites-list");
+  document.getElementById("favorites-empty").classList.toggle("hidden", list.length > 0);
+
+  wrap.innerHTML = list.map(r => `
+    <div class="border border-bone-dark rounded-2xl p-4 bg-white/70">
+      <div class="flex items-start gap-3">
+        ${r.image ? `<img src="${escapeHtml(r.image)}" alt="" class="w-14 h-14 rounded-xl object-cover shrink-0 bg-bone-dark">` : ""}
+        <div class="flex-1 min-w-0">
+          <h3 class="font-display font-semibold text-navy leading-snug">${escapeHtml(r.title)}</h3>
+          ${r.time ? `<p class="text-xs text-navy/50 mt-1 flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i>${escapeHtml(r.time)}${r.difficulty ? ` · ${escapeHtml(r.difficulty)}` : ""}</p>` : ""}
+        </div>
+        ${favoriteBtnHtml(r.id, true)}
+      </div>
+      ${r.steps && r.steps.length ? `
+        <ol class="mt-3 space-y-1.5 text-sm text-navy/70 list-decimal list-inside">
+          ${r.steps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}
+        </ol>` : (r.sourceUrl ? `<a href="${escapeHtml(r.sourceUrl)}" target="_blank" rel="noopener" class="inline-block mt-3 text-xs text-cognac-dark hover:underline">Открыть оригинал рецепта →</a>` : "")}
+    </div>
+  `).join("");
+  lucide.createIcons();
+
+  wrap.querySelectorAll(".fav-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      toggleFavoriteRecipe({ id: btn.dataset.favId });
+      renderFavoritesPage();
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Многостраничность: Холодильник / Избранное / Профиль (нижняя навигация)
+// ---------------------------------------------------------------------------
+function showPage(name) {
+  ["home", "favorites", "profile"].forEach(p => {
+    document.getElementById(`page-${p}`).classList.toggle("hidden", p !== name);
+  });
+  document.querySelectorAll(".nav-button").forEach(btn => {
+    if (btn.dataset.page === name) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
+  if (name === "favorites") renderFavoritesPage();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+document.querySelectorAll(".nav-button").forEach(btn => {
+  btn.addEventListener("click", () => showPage(btn.dataset.page));
+});
+
+// ---------------------------------------------------------------------------
 // «Что приготовить?»
 // ---------------------------------------------------------------------------
 const cookBtn = document.getElementById("cook-btn");
@@ -636,7 +719,7 @@ cookBtn.addEventListener("click", async () => {
     }
   }
 
-  showRecipeSourceNote(BACKEND_ENABLED ? "База рецептов: локальная подборка (Spoonacular не настроен)" : "");
+  showRecipeSourceNote("");
   const withStatus = products.map(p => ({ name: p.name, status: getExpiry(p).status }));
   renderRecipes(matchRecipes(withStatus));
 });
@@ -669,6 +752,7 @@ function renderApiRecipes(recipes) {
             ${r.missedIngredients.slice(0, 3).map(m => `<span class="text-[11px] px-2 py-0.5 rounded-full bg-navy/10 text-navy/50 font-medium">+ ${escapeHtml(m)}</span>`).join("")}
           </div>
         </div>
+        ${favoriteBtnHtml(r.id, isFavoriteRecipe(r.id))}
       </div>
       <button class="recipe-expand-btn w-full text-xs font-medium text-cognac-dark border-t border-bone-dark py-2.5 hover:bg-bone-dark/30 transition-colors" data-id="${r.id}">
         Показать рецепт
@@ -680,6 +764,18 @@ function renderApiRecipes(recipes) {
 
   document.querySelectorAll(".recipe-expand-btn").forEach(btn => {
     btn.addEventListener("click", () => toggleRecipeSteps(btn));
+  });
+
+  recipeResults.querySelectorAll(".fav-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const r = recipes.find(x => String(x.id) === btn.dataset.favId);
+      if (!r) return;
+      const added = toggleFavoriteRecipe({ id: r.id, title: r.title, image: r.image, source: "api" });
+      btn.classList.toggle("is-fav", added);
+      btn.classList.toggle("text-terracotta", added);
+      btn.classList.toggle("text-navy/25", !added);
+      btn.querySelector("i").setAttribute("fill", added ? "currentColor" : "none");
+    });
   });
 }
 
@@ -746,7 +842,10 @@ function renderRecipes(matches) {
     <div class="border border-bone-dark rounded-2xl p-4 bg-bone/60">
       <div class="flex items-start justify-between gap-3">
         <h3 class="font-display font-semibold text-lg text-navy">${escapeHtml(recipe.title)}</h3>
-        <span class="shrink-0 text-[11px] font-mono px-2 py-1 rounded-full bg-cognac/15 text-cognac-dark whitespace-nowrap">${score} балл${score === 1 ? "" : "а"}</span>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="text-[11px] font-mono px-2 py-1 rounded-full bg-cognac/15 text-cognac-dark whitespace-nowrap">${score} балл${score === 1 ? "" : "а"}</span>
+          ${favoriteBtnHtml(recipe.id, isFavoriteRecipe(recipe.id))}
+        </div>
       </div>
       <div class="flex items-center gap-3 mt-1.5 text-xs text-navy/50">
         <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i>${recipe.time}</span>
@@ -761,6 +860,17 @@ function renderRecipes(matches) {
     </div>
   `).join("");
   lucide.createIcons();
+
+  recipeResults.querySelectorAll(".fav-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const { recipe } = matches.find(m => String(m.recipe.id) === btn.dataset.favId);
+      const added = toggleFavoriteRecipe({ id: recipe.id, title: recipe.title, time: recipe.time, difficulty: recipe.difficulty, steps: recipe.steps, source: "local" });
+      btn.classList.toggle("is-fav", added);
+      btn.classList.toggle("text-terracotta", added);
+      btn.classList.toggle("text-navy/25", !added);
+      btn.querySelector("i").setAttribute("fill", added ? "currentColor" : "none");
+    });
+  });
 }
 
 function openModal() {
