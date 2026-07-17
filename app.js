@@ -45,6 +45,7 @@ let presenceChannelRef = null;
 let authTab = "login";    // "login" | "signup" на экране входа
 let currentTab = "create";
 let products = [];
+let lastAddedId = null; // для анимации "въезда" новой карточки в список
 
 function uuid() {
   if (window.crypto && crypto.randomUUID && window.isSecureContext) {
@@ -143,10 +144,16 @@ function getExpiry(product) {
 }
 
 const STATUS_META = {
-  red:    { label: "Съесть срочно", ring: "#BC4B34", chip: "bg-[#BC4B34]/15 text-[#8f3623]" },
-  yellow: { label: "Срок подходит", ring: "#D6A24C", chip: "bg-[#D6A24C]/20 text-[#8a6520]" },
-  green:  { label: "Свежий",        ring: "#6E9075", chip: "bg-[#6E9075]/15 text-[#3f5a44]" }
+  red:    { label: "Съесть срочно", ring: "#BC4B34", chip: "bg-[#BC4B34]/15 text-[#8f3623]", pulse: true },
+  yellow: { label: "Срок подходит", ring: "#D6A24C", chip: "bg-[#D6A24C]/20 text-[#8a6520]", pulse: false },
+  green:  { label: "Свежий",        ring: "#059669", chip: "bg-[#059669]/15 text-[#065f46]", pulse: false }
 };
+
+function formatQty(quantity, unit) {
+  const n = Number(quantity) || 1;
+  const rounded = Math.round(n * 10) / 10;
+  return `${rounded} ${unit || "шт"}`;
+}
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -157,22 +164,34 @@ function escapeHtml(str) {
 // ---------------------------------------------------------------------------
 // Добавление / удаление продуктов (единая точка входа для обоих режимов)
 // ---------------------------------------------------------------------------
-async function addProduct(name, category) {
+async function addProduct(name, category, quantity = 1, unit = "шт") {
   if (BACKEND_ENABLED && householdCode) {
-    const { error } = await sb.from("products").insert({
+    const { data, error } = await sb.from("products").insert({
       household_code: householdCode,
       name,
       category,
+      quantity,
+      unit,
       added_at: Date.now(),
       added_by: memberName
-    });
+    }).select().single();
     if (error) {
       console.error(error);
       alert("Не удалось добавить продукт. Проверьте подключение к базе данных.");
+      return;
     }
-    // дальше список обновит realtime-подписка
+    // Не полагаемся только на realtime-канал: если он на секунду отстал или
+    // переподключается, продукт всё равно должен появиться сразу же.
+    if (data && !products.find(p => p.id === data.id)) {
+      products.push({ id: data.id, name: data.name, category: data.category, quantity: Number(data.quantity) || 1, unit: data.unit || "шт", addedAt: Number(data.added_at), addedBy: data.added_by });
+      lastAddedId = data.id;
+      render();
+      triggerFamilySyncPulse();
+    }
   } else {
-    products.push({ id: uuid(), name, category, addedAt: Date.now() });
+    const id = uuid();
+    products.push({ id, name, category, quantity, unit, addedAt: Date.now() });
+    lastAddedId = id;
     saveProducts();
     render();
     triggerFamilySyncPulse();
@@ -185,7 +204,12 @@ async function removeProduct(id) {
     if (error) {
       console.error(error);
       alert("Не удалось удалить продукт. Проверьте подключение к базе данных.");
+      return;
     }
+    // Так же, как при добавлении: убираем из локального состояния сразу,
+    // не дожидаясь realtime-события DELETE.
+    products = products.filter(p => p.id !== id);
+    render();
   } else {
     products = products.filter(p => p.id !== id);
     saveProducts();
@@ -206,6 +230,7 @@ function render() {
   renderStats();
   renderGrid();
   lucide.createIcons();
+  checkExpiryNotifications();
 }
 
 function renderStats() {
@@ -221,13 +246,18 @@ function renderGrid() {
   fridgeGrid.innerHTML = "";
   emptyState.classList.toggle("hidden", sorted.length > 0);
 
-  sorted.forEach(product => {
+  const justAddedId = lastAddedId;
+  lastAddedId = null; // подсвечиваем "въезд" только один раз, а не при каждом render()
+
+  sorted.forEach((product, index) => {
     const cat = CATEGORIES[product.category] || CATEGORIES.other;
     const { daysLeft, status } = getExpiry(product);
     const meta = STATUS_META[status];
 
     const card = document.createElement("div");
-    card.className = "group relative flex items-stretch bg-white/80 rounded-2xl shadow-sm border border-bone-dark overflow-hidden hover:bg-bone-dark/70 hover:border-navy/25 hover:shadow-lg transition-all duration-200";
+    card.className = "group relative flex items-stretch bg-white/80 rounded-2xl shadow-sm border border-bone-dark overflow-hidden hover:bg-bone-dark/70 hover:border-navy/25 hover:shadow-lg transition-all duration-200 list-item-in";
+    card.style.animationDelay = `${Math.min(index, 8) * 40}ms`;
+    if (product.id === justAddedId) card.classList.add("list-item-fresh");
 
     const dayLabel = daysLeft < 0
       ? `Просрочен на ${Math.abs(daysLeft)} дн.`
@@ -235,15 +265,17 @@ function renderGrid() {
         ? "Съесть сегодня"
         : `${daysLeft} дн. осталось`;
 
+    const qtyLabel = formatQty(product.quantity, product.unit);
+
     card.innerHTML = `
-      <div class="w-2.5 shrink-0" style="background:${meta.ring}"></div>
+      <div class="w-2.5 shrink-0 status-strip${meta.pulse ? " status-strip-urgent" : ""}" style="--status-color:${meta.ring}"></div>
       <div class="flex-1 flex items-center gap-3 p-3.5">
         <div class="relative w-12 h-12 shrink-0 rounded-xl flex items-center justify-center" style="background:${cat.color}22">
           <i data-lucide="${cat.icon}" class="w-6 h-6" style="color:${cat.color}"></i>
         </div>
         <div class="flex-1 min-w-0">
           <p class="font-display font-semibold text-navy truncate">${escapeHtml(product.name)}</p>
-          <p class="text-xs text-navy/50">${cat.label}${product.addedBy ? ` · добавил(а) ${escapeHtml(product.addedBy)}` : ""}</p>
+          <p class="text-xs text-navy/50">${cat.label} · ${qtyLabel}${product.addedBy ? ` · добавил(а) ${escapeHtml(product.addedBy)}` : ""}</p>
         </div>
         <div class="text-right shrink-0">
           <span class="inline-block text-[11px] font-mono font-semibold px-2 py-1 rounded-full ${meta.chip}">${dayLabel}</span>
@@ -271,10 +303,14 @@ const categorySelect = document.getElementById("product-category");
 const shelfLifeHint = document.getElementById("shelf-life-hint");
 
 function populateCategorySelect() {
-  categorySelect.innerHTML = Object.entries(CATEGORIES)
+  fillCategoryOptions(categorySelect);
+  updateShelfLifeHint();
+}
+
+function fillCategoryOptions(selectEl) {
+  selectEl.innerHTML = Object.entries(CATEGORIES)
     .map(([key, c]) => `<option value="${key}">${c.label}</option>`)
     .join("");
-  updateShelfLifeHint();
 }
 
 function updateShelfLifeHint() {
@@ -284,14 +320,96 @@ function updateShelfLifeHint() {
 
 categorySelect.addEventListener("change", updateShelfLifeHint);
 
+const qtyInput = document.getElementById("product-qty");
+const unitSelect = document.getElementById("product-unit");
+
 addForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = nameInput.value.trim();
   if (!name) return;
-  addProduct(name, categorySelect.value);
+  const quantity = parseFloat(qtyInput.value) || 1;
+  addProduct(name, categorySelect.value, quantity, unitSelect.value);
   nameInput.value = "";
+  qtyInput.value = "1";
   nameInput.focus();
 });
+
+// ---------------------------------------------------------------------------
+// Регулярные покупки — то, что обычно заканчивается и докупается снова
+// (молоко, яйца, хлеб…). Хранится локально в этом браузере, как избранные
+// рецепты — не привязано к семейному бэкенду, потому что это личный список
+// напоминаний, а не сами продукты в холодильнике.
+// ---------------------------------------------------------------------------
+const REGULARS_KEY = "smart-fridge-regulars";
+const regularForm = document.getElementById("regular-form");
+const regularNameInput = document.getElementById("regular-name");
+const regularCategorySelect = document.getElementById("regular-category");
+const regularList = document.getElementById("regular-list");
+const regularEmpty = document.getElementById("regular-empty");
+
+function loadRegulars() {
+  try { return JSON.parse(localStorage.getItem(REGULARS_KEY)) || []; }
+  catch (e) { return []; }
+}
+
+function saveRegulars(list) {
+  localStorage.setItem(REGULARS_KEY, JSON.stringify(list));
+}
+
+function renderRegulars() {
+  const list = loadRegulars();
+  regularEmpty.classList.toggle("hidden", list.length > 0);
+
+  regularList.innerHTML = list.map(item => {
+    const cat = CATEGORIES[item.category] || CATEGORIES.other;
+    return `
+      <div class="flex items-center gap-3 bg-bone/60 border border-bone-dark rounded-xl px-3 py-2.5">
+        <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center" style="background:${cat.color}22">
+          <i data-lucide="${cat.icon}" class="w-4.5 h-4.5" style="color:${cat.color}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-navy truncate">${escapeHtml(item.name)}</p>
+          <p class="text-xs text-navy/45">${cat.label}</p>
+        </div>
+        <button data-id="${item.id}" class="regular-add-btn shrink-0 bg-navy/5 hover:bg-cognac hover:text-white text-navy text-xs font-medium rounded-lg px-3 py-1.5 flex items-center gap-1 transition-colors" title="Добавить в холодильник">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>В холодильник
+        </button>
+        <button data-id="${item.id}" class="regular-remove-btn shrink-0 text-navy/30 hover:text-terracotta transition-colors p-1" title="Перестать отслеживать">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>`;
+  }).join("");
+  lucide.createIcons();
+
+  regularList.querySelectorAll(".regular-add-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const item = loadRegulars().find(r => r.id === btn.dataset.id);
+      if (!item) return;
+      addProduct(item.name, item.category, 1, "шт");
+    });
+  });
+  regularList.querySelectorAll(".regular-remove-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      saveRegulars(loadRegulars().filter(r => r.id !== btn.dataset.id));
+      renderRegulars();
+    });
+  });
+}
+
+fillCategoryOptions(regularCategorySelect);
+
+regularForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = regularNameInput.value.trim();
+  if (!name) return;
+  const list = loadRegulars();
+  list.push({ id: uuid(), name, category: regularCategorySelect.value });
+  saveRegulars(list);
+  regularNameInput.value = "";
+  renderRegulars();
+});
+
+renderRegulars();
 
 // ---------------------------------------------------------------------------
 // Семейный доступ — локальный демо-режим (переключатель-симуляция)
@@ -331,6 +449,80 @@ function triggerFamilySyncPulse() {
     familySyncPulse.classList.remove("animate-ping-once");
   }, 900);
 }
+
+// ---------------------------------------------------------------------------
+// Уведомления об истекающих продуктах (Notification API — нативный, без
+// сторонних библиотек). Работает, пока приложение открыто в браузере;
+// настоящий push на закрытое приложение требует сервера, отправляющего
+// Web Push (см. README) — это отдельная задача.
+// ---------------------------------------------------------------------------
+const NOTIFY_PREF_KEY = "smart-fridge-notify-enabled";
+const NOTIFIED_LOG_KEY = "smart-fridge-notified-today";
+const notifyToggle = document.getElementById("notify-toggle");
+const notifyStatusText = document.getElementById("notify-status-text");
+
+function isNotifyEnabled() {
+  return localStorage.getItem(NOTIFY_PREF_KEY) === "on"
+    && typeof Notification !== "undefined" && Notification.permission === "granted";
+}
+
+function renderNotifyToggle() {
+  const on = isNotifyEnabled();
+  notifyToggle.setAttribute("aria-checked", String(on));
+  notifyToggle.classList.toggle("bg-terracotta", on);
+  notifyToggle.classList.toggle("bg-navy/15", !on);
+  notifyToggle.querySelector("span").classList.toggle("translate-x-5", on);
+  notifyToggle.querySelector("span").classList.toggle("translate-x-0.5", !on);
+  if (typeof Notification === "undefined") {
+    notifyStatusText.textContent = "Этот браузер не поддерживает уведомления";
+  } else if (Notification.permission === "denied") {
+    notifyStatusText.textContent = "Уведомления заблокированы в настройках браузера";
+  } else {
+    notifyStatusText.textContent = on ? "Включено — проверяем каждые 15 минут" : "Напомнить, когда продукт скоро испортится";
+  }
+}
+
+notifyToggle.addEventListener("click", async () => {
+  if (typeof Notification === "undefined") return;
+  if (isNotifyEnabled()) {
+    localStorage.setItem(NOTIFY_PREF_KEY, "off");
+    renderNotifyToggle();
+    return;
+  }
+  const permission = Notification.permission === "granted"
+    ? "granted"
+    : await Notification.requestPermission();
+  if (permission === "granted") {
+    localStorage.setItem(NOTIFY_PREF_KEY, "on");
+    checkExpiryNotifications();
+  }
+  renderNotifyToggle();
+});
+
+function checkExpiryNotifications() {
+  if (!isNotifyEnabled()) return;
+  const today = new Date().toDateString();
+  let notifiedToday = {};
+  try { notifiedToday = JSON.parse(localStorage.getItem(NOTIFIED_LOG_KEY)) || {}; } catch (e) {}
+  if (notifiedToday.date !== today) notifiedToday = { date: today, ids: [] };
+
+  const urgent = products.filter(p => {
+    const { daysLeft, status } = getExpiry(p);
+    return status === "red" && daysLeft >= 0 && !notifiedToday.ids.includes(p.id);
+  });
+  if (urgent.length === 0) return;
+
+  const body = urgent.length === 1
+    ? `${urgent[0].name} скоро испортится — самое время его съесть.`
+    : `${urgent.length} продукта(ов) скоро испортятся: ${urgent.slice(0, 3).map(p => p.name).join(", ")}${urgent.length > 3 ? "…" : ""}`;
+  new Notification("Умный холодильник", { body, icon: "https://api.iconify.design/lucide/refrigerator.svg" });
+
+  notifiedToday.ids.push(...urgent.map(p => p.id));
+  localStorage.setItem(NOTIFIED_LOG_KEY, JSON.stringify(notifiedToday));
+}
+
+renderNotifyToggle();
+setInterval(checkExpiryNotifications, 15 * 60 * 1000);
 
 function renderFamilyMembers() {
   const wrap = document.getElementById("family-members");
@@ -431,6 +623,7 @@ async function fetchProductsFromBackend() {
   if (error) throw error;
   products = data.map(row => ({
     id: row.id, name: row.name, category: row.category,
+    quantity: Number(row.quantity) || 1, unit: row.unit || "шт",
     addedAt: Number(row.added_at), addedBy: row.added_by
   }));
 }
@@ -448,14 +641,14 @@ function subscribeToProductChanges() {
       if (payload.eventType === "INSERT") {
         const row = payload.new;
         if (!products.find(p => p.id === row.id)) {
-          products.push({ id: row.id, name: row.name, category: row.category, addedAt: Number(row.added_at), addedBy: row.added_by });
+          products.push({ id: row.id, name: row.name, category: row.category, quantity: Number(row.quantity) || 1, unit: row.unit || "шт", addedAt: Number(row.added_at), addedBy: row.added_by });
         }
       } else if (payload.eventType === "DELETE") {
         products = products.filter(p => p.id !== payload.old.id);
       } else if (payload.eventType === "UPDATE") {
         const row = payload.new;
         const idx = products.findIndex(p => p.id === row.id);
-        if (idx >= 0) products[idx] = { id: row.id, name: row.name, category: row.category, addedAt: Number(row.added_at), addedBy: row.added_by };
+        if (idx >= 0) products[idx] = { id: row.id, name: row.name, category: row.category, quantity: Number(row.quantity) || 1, unit: row.unit || "шт", addedAt: Number(row.added_at), addedBy: row.added_by };
       }
       render();
     })
@@ -774,7 +967,7 @@ function renderApiRecipes(recipes) {
       btn.classList.toggle("is-fav", added);
       btn.classList.toggle("text-terracotta", added);
       btn.classList.toggle("text-navy/25", !added);
-      btn.querySelector("i").setAttribute("fill", added ? "currentColor" : "none");
+      btn.querySelector("svg").setAttribute("fill", added ? "currentColor" : "none");
     });
   });
 }
@@ -808,6 +1001,7 @@ async function toggleRecipeSteps(btn) {
         ${data.readyInMinutes ? `<span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i>${data.readyInMinutes} мин</span>` : ""}
         ${data.servings ? `<span class="flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i>${data.servings} порц.</span>` : ""}
       </div>
+      ${nutritionBadgesHtml(data.nutrition)}
       ${data.steps && data.steps.length
         ? `<ol class="space-y-1.5 text-sm text-navy/70 list-decimal list-inside">${data.steps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ol>`
         : `<p class="text-sm text-navy/50">Подробные шаги не указаны автором рецепта.</p>`}
@@ -824,6 +1018,20 @@ async function toggleRecipeSteps(btn) {
     btn.textContent = "Скрыть рецепт";
   }
   btn.disabled = false;
+}
+
+function nutritionBadgesHtml(nutrition) {
+  if (!nutrition) return "";
+  const { calories, protein, fat, carbs } = nutrition;
+  const item = (label, value, unit) => value == null ? "" : `
+    <span class="text-[11px] px-2 py-1 rounded-lg bg-navy/5 text-navy/60 font-mono whitespace-nowrap">${label} ${Math.round(value)}${unit}</span>`;
+  return `
+    <div class="flex flex-wrap gap-1.5 mt-2" title="Ориентировочно, на порцию">
+      ${item("Ккал", calories, "")}
+      ${item("Б", protein, "г")}
+      ${item("Ж", fat, "г")}
+      ${item("У", carbs, "г")}
+    </div>`;
 }
 
 function renderRecipes(matches) {
@@ -850,7 +1058,9 @@ function renderRecipes(matches) {
       <div class="flex items-center gap-3 mt-1.5 text-xs text-navy/50">
         <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i>${recipe.time}</span>
         <span class="flex items-center gap-1"><i data-lucide="gauge" class="w-3.5 h-3.5"></i>${recipe.difficulty}</span>
+        ${recipe.servings ? `<span class="flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i>${recipe.servings} порц.</span>` : ""}
       </div>
+      ${nutritionBadgesHtml(recipe.nutrition)}
       <div class="flex flex-wrap gap-1.5 mt-3">
         ${matched.map(m => `<span class="text-[11px] px-2 py-0.5 rounded-full bg-terracotta/10 text-terracotta font-medium">${escapeHtml(m)}</span>`).join("")}
       </div>
@@ -868,7 +1078,7 @@ function renderRecipes(matches) {
       btn.classList.toggle("is-fav", added);
       btn.classList.toggle("text-terracotta", added);
       btn.classList.toggle("text-navy/25", !added);
-      btn.querySelector("i").setAttribute("fill", added ? "currentColor" : "none");
+      btn.querySelector("svg").setAttribute("fill", added ? "currentColor" : "none");
     });
   });
 }

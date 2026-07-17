@@ -5,6 +5,10 @@
  *
  * ingredients — ключевые слова для сопоставления с названиями продуктов
  * пользователя (сравнение идёт по вхождению подстроки, без учёта регистра).
+ *
+ * servings/nutrition — ориентировочные значения на порцию, для быстрой
+ * оценки калорийности блюда. Это не точный диетологический расчёт под
+ * конкретные продукты пользователя, а справочный ориентир.
  */
 const RECIPE_LIBRARY = [
   {
@@ -12,6 +16,8 @@ const RECIPE_LIBRARY = [
     title: "Быстрая курица с овощами вок",
     time: "20 мин",
     difficulty: "Легко",
+    servings: 2,
+    nutrition: { calories: 320, protein: 28, fat: 12, carbs: 22 },
     ingredients: ["курица", "куриц", "морковь", "перец", "лук", "брокколи", "соевый соус"],
     steps: [
       "Нарежьте курицу тонкими полосками, обжарьте на сильном огне 5 минут.",
@@ -24,6 +30,8 @@ const RECIPE_LIBRARY = [
     title: "Молочные блинчики на скорую руку",
     time: "25 мин",
     difficulty: "Легко",
+    servings: 3,
+    nutrition: { calories: 260, protein: 8, fat: 9, carbs: 36 },
     ingredients: ["молоко", "яйцо", "яйца", "мука", "масло сливочное"],
     steps: [
       "Смешайте молоко, яйца и муку до однородности венчиком.",
@@ -36,6 +44,8 @@ const RECIPE_LIBRARY = [
     title: "Овсяная запеканка с яблоками",
     time: "35 мин",
     difficulty: "Средне",
+    servings: 4,
+    nutrition: { calories: 210, protein: 7, fat: 6, carbs: 33 },
     ingredients: ["яблоко", "яблоки", "овсянка", "молоко", "яйцо", "яйца", "корица"],
     steps: [
       "Нарежьте яблоки тонкими дольками и выложите на дно формы.",
@@ -48,6 +58,8 @@ const RECIPE_LIBRARY = [
     title: "Рыба с овощами на пару",
     time: "20 мин",
     difficulty: "Легко",
+    servings: 2,
+    nutrition: { calories: 280, protein: 30, fat: 10, carbs: 14 },
     ingredients: ["рыба", "лосось", "треска", "лимон", "кабачок", "морковь", "брокколи"],
     steps: [
       "Приправьте рыбу солью, перцем и лимонным соком.",
@@ -60,6 +72,8 @@ const RECIPE_LIBRARY = [
     title: "Овощной суп «всё, что есть в холодильнике»",
     time: "30 мин",
     difficulty: "Легко",
+    servings: 4,
+    nutrition: { calories: 120, protein: 3, fat: 4, carbs: 18 },
     ingredients: ["картофель", "морковь", "лук", "капуста", "помидор", "перец", "кабачок"],
     steps: [
       "Обжарьте лук и морковь на масле 3–4 минуты.",
@@ -72,6 +86,8 @@ const RECIPE_LIBRARY = [
     title: "Запеканка из творога",
     time: "40 мин",
     difficulty: "Средне",
+    servings: 4,
+    nutrition: { calories: 230, protein: 16, fat: 9, carbs: 21 },
     ingredients: ["творог", "яйцо", "яйца", "манка", "сметана", "изюм"],
     steps: [
       "Смешайте творог, яйца и манку до однородной массы.",
@@ -84,6 +100,8 @@ const RECIPE_LIBRARY = [
     title: "Тушёная говядина с картофельным пюре",
     time: "50 мин",
     difficulty: "Средне",
+    servings: 3,
+    nutrition: { calories: 420, protein: 27, fat: 18, carbs: 34 },
     ingredients: ["говядина", "мясо", "картофель", "лук", "морковь"],
     steps: [
       "Обжарьте кусочки говядины до румяной корочки.",
@@ -96,6 +114,8 @@ const RECIPE_LIBRARY = [
     title: "Йогуртовая боул с фруктами",
     time: "5 мин",
     difficulty: "Легко",
+    servings: 1,
+    nutrition: { calories: 190, protein: 9, fat: 4, carbs: 30 },
     ingredients: ["йогурт", "банан", "яблоко", "яблоки", "ягоды", "мёд"],
     steps: [
       "Нарежьте фрукты небольшими кусочками.",
@@ -108,6 +128,8 @@ const RECIPE_LIBRARY = [
     title: "Омлет с сыром и зеленью",
     time: "10 мин",
     difficulty: "Легко",
+    servings: 1,
+    nutrition: { calories: 310, protein: 21, fat: 23, carbs: 3 },
     ingredients: ["яйцо", "яйца", "сыр", "молоко", "зелень"],
     steps: [
       "Взбейте яйца с молоком и щепоткой соли.",
@@ -120,6 +142,8 @@ const RECIPE_LIBRARY = [
     title: "Тосты с помидором и сыром",
     time: "10 мин",
     difficulty: "Легко",
+    servings: 1,
+    nutrition: { calories: 240, protein: 11, fat: 10, carbs: 26 },
     ingredients: ["хлеб", "батон", "помидор", "сыр", "масло сливочное"],
     steps: [
       "Слегка обжарьте хлеб на сухой сковороде или в тостере.",

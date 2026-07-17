@@ -236,6 +236,27 @@
         id="product-category"
         class="bg-bone border border-bone-dark rounded-xl px-3.5 py-2.5 text-sm focus:border-cognac transition-colors sm:w-40"
       ></select>
+      <div class="flex gap-2.5">
+        <input
+          id="product-qty"
+          type="number"
+          min="0.1"
+          step="0.1"
+          value="1"
+          placeholder="Кол-во"
+          class="w-full sm:w-20 bg-bone border border-bone-dark rounded-xl px-3 py-2.5 text-sm placeholder:text-navy/35 focus:border-cognac transition-colors"
+        >
+        <select
+          id="product-unit"
+          class="bg-bone border border-bone-dark rounded-xl px-2 py-2.5 text-sm focus:border-cognac transition-colors sm:w-24"
+        >
+          <option value="шт">шт</option>
+          <option value="г">г</option>
+          <option value="кг">кг</option>
+          <option value="мл">мл</option>
+          <option value="л">л</option>
+        </select>
+      </div>
       <button
         type="submit"
         class="bg-navy hover:bg-navy/90 text-bone font-medium text-sm rounded-xl px-5 py-2.5 flex items-center justify-center gap-1.5 transition-colors"
@@ -245,6 +266,36 @@
       </button>
     </form>
     <p id="shelf-life-hint" class="text-xs text-navy/45 mt-2"></p>
+  </section>
+
+  <!-- Регулярные покупки -->
+  <section class="bg-white/70 border border-bone-dark rounded-2xl p-4 sm:p-5">
+    <h2 class="font-display font-semibold text-base mb-3 flex items-center gap-2">
+      <i data-lucide="repeat" class="w-4.5 h-4.5 text-cognac"></i>
+      Нужно покупать регулярно
+    </h2>
+    <form id="regular-form" class="flex flex-col sm:flex-row gap-2.5 mb-3">
+      <input
+        id="regular-name"
+        type="text"
+        required
+        placeholder="Например, Молоко"
+        class="flex-1 bg-bone border border-bone-dark rounded-xl px-3.5 py-2.5 text-sm placeholder:text-navy/35 focus:border-cognac transition-colors"
+      >
+      <select
+        id="regular-category"
+        class="bg-bone border border-bone-dark rounded-xl px-3.5 py-2.5 text-sm focus:border-cognac transition-colors sm:w-40"
+      ></select>
+      <button
+        type="submit"
+        class="bg-navy hover:bg-navy/90 text-bone font-medium text-sm rounded-xl px-5 py-2.5 flex items-center justify-center gap-1.5 transition-colors"
+      >
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        Следить
+      </button>
+    </form>
+    <div id="regular-list" class="space-y-2"></div>
+    <p id="regular-empty" class="hidden text-xs text-navy/45 py-2">Список пуст — добавьте продукты, которые заканчиваются регулярно (молоко, яйца, хлеб…), и потом добавляйте их в холодильник в один клик.</p>
   </section>
 
   <!-- Fridge -->
@@ -352,6 +403,32 @@
         <div id="presence-list" class="flex flex-wrap gap-1.5 mt-3"></div>
       </div>
     </div>
+  </section>
+
+  <!-- Уведомления об истекающих продуктах -->
+  <section class="bg-white/70 border border-bone-dark rounded-2xl p-4 sm:p-5">
+    <div class="flex items-center justify-between gap-4">
+      <div class="flex items-start gap-3">
+        <div class="w-9 h-9 shrink-0 rounded-xl bg-terracotta/15 flex items-center justify-center">
+          <i data-lucide="bell" class="w-4.5 h-4.5 text-terracotta"></i>
+        </div>
+        <div>
+          <h2 class="font-display font-semibold text-base">Уведомления</h2>
+          <p id="notify-status-text" class="text-xs text-navy/50 mt-0.5">Напомнить, когда продукт скоро испортится</p>
+        </div>
+      </div>
+      <button
+        id="notify-toggle"
+        role="switch"
+        aria-checked="false"
+        class="relative w-11 h-6 rounded-full transition-colors bg-navy/15 shrink-0"
+      >
+        <span class="absolute top-0.5 translate-x-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"></span>
+      </button>
+    </div>
+    <p class="text-[11px] text-navy/40 mt-3 pl-12">
+      Работает, пока приложение открыто в браузере (эта или фоновая вкладка). Уведомления при полностью закрытом браузере требуют серверной push-рассылки — это следующий шаг, не входит в текущую версию.
+    </p>
   </section>
 </div>
 <!-- /page-profile -->

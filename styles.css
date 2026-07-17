@@ -140,6 +140,55 @@ html, body {
   transform: translateY(-12px) scale(0.94);
 }
 
+/* ---------------------------------------------------------------------------
+   Полоса свежести на карточке продукта: при появлении карточки цвет
+   "проявляется" из нейтрального в статусный (red/yellow/green), а для
+   срочных товаров — мягкое дышащее свечение, чтобы взгляд зацепился без
+   раздражающего мигания.
+--------------------------------------------------------------------------- */
+.status-strip {
+  background: var(--status-color);
+  animation: status-reveal 0.5s ease-out;
+}
+@keyframes status-reveal {
+  0%   { background: var(--bone-dark); }
+  100% { background: var(--status-color); }
+}
+.status-strip-urgent {
+  animation: status-reveal 0.5s ease-out, status-breathe 2.4s ease-in-out 0.5s infinite;
+}
+@keyframes status-breathe {
+  0%, 100% { box-shadow: inset 0 0 0 0 var(--status-color); filter: brightness(1); }
+  50%      { box-shadow: inset 0 0 10px 0 var(--status-color); filter: brightness(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-strip, .status-strip-urgent { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Появление карточек списком — vanilla-аналог AnimatedList из unlumen-ui:
+   каждая карточка "въезжает" сверху с лёгким затуханием, с небольшим
+   каскадным сдвигом по времени (см. app.js, animationDelay в renderGrid()).
+   Свежедобавленная карточка получает более заметный акцент.
+--------------------------------------------------------------------------- */
+@keyframes list-item-in {
+  0%   { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.list-item-in {
+  animation: list-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.list-item-fresh {
+  animation: list-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both, list-item-glow 1.1s ease-out;
+}
+@keyframes list-item-glow {
+  0%   { box-shadow: 0 0 0 2px var(--cognac); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .list-item-in, .list-item-fresh { animation: none; }
+}
+
 /* Сердечко "в избранное": лёгкий пружинный поп при добавлении */
 @keyframes heart-pop {
   0%   { transform: scale(1); }
