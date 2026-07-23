@@ -44,6 +44,7 @@ let authTab = "login";    // "login" | "signup" на экране входа
 let currentTab = "create";
 let products = [];
 let history = [];   // { id, name, category, addedAt, removedAt, addedBy }
+let productsChannel = null;
 
 function uuid() {
   if (window.crypto && crypto.randomUUID && window.isSecureContext) {
