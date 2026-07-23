@@ -435,26 +435,24 @@ async function fetchProductsFromBackend() {
 }
 
 function subscribeToProductChanges() {
-  sb.channel(`products-changes-${householdCode}`)
+  if (productsChannel) {
+    sb.removeChannel(productsChannel);
+    productsChannel = null;
+  }
+
+  productsChannel = sb.channel(`products-changes-${householdCode}`)
     .on("postgres_changes", {
-      event: "*", schema: "public", table: "products",
+      event: "*", 
+      schema: "public", 
+      table: "products",
       filter: `household_code=eq.${householdCode}`
     }, (payload) => {
-      if (payload.eventType === "INSERT") {
-        const row = payload.new;
-        if (!products.find(p => p.id === row.id)) {
-          products.push({ id: row.id, name: row.name, category: row.category, addedAt: Number(row.added_at), addedBy: row.added_by });
-        }
-      } else if (payload.eventType === "DELETE") {
-        products = products.filter(p => p.id !== payload.old.id);
-      } else if (payload.eventType === "UPDATE") {
-        const row = payload.new;
-        const idx = products.findIndex(p => p.id === row.id);
-        if (idx >= 0) products[idx] = { id: row.id, name: row.name, category: row.category, addedAt: Number(row.added_at), addedBy: row.added_by };
-      }
-      render();
-    })
-    .subscribe();
+      // обработка обновлений
+      loadProductsBackend();
+    });
+
+  // Вызывать .subscribe() СТРОГО после .on(...)
+  productsChannel.subscribe();
 }
 
 function subscribeToPresence() {
