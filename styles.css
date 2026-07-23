@@ -213,3 +213,80 @@ select:focus-visible {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Экран входа/регистрации: градиентный фон, дрейфующие цветовые пятна и
+   стеклянная карточка формы. Палитра и кривые — те же, что и в остальном
+   приложении (navy/cognac/plum, cubic-bezier пружины из nav-icon-frame).
+--------------------------------------------------------------------------- */
+.auth-bg {
+  background: linear-gradient(135deg, var(--navy) 0%, #241b3a 45%, var(--plum, #6B4C7A) 100%);
+  overflow: hidden;
+}
+.auth-blob {
+  position: absolute;
+  width: 46vmax;
+  height: 46vmax;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.28;
+  pointer-events: none;
+  z-index: 0;
+}
+.auth-blob-cognac {
+  background: var(--cognac);
+  top: -12%;
+  left: -14%;
+  animation: auth-drift-a 16s ease-in-out infinite alternate;
+}
+.auth-blob-plum {
+  background: var(--plum-light, #EFE3F3);
+  bottom: -18%;
+  right: -12%;
+  animation: auth-drift-b 20s ease-in-out infinite alternate;
+}
+@keyframes auth-drift-a {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(6%, 8%) scale(1.12); }
+}
+@keyframes auth-drift-b {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-8%, -6%) scale(1.08); }
+}
+.auth-card {
+  z-index: 1;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 24px 60px -20px rgba(20, 33, 61, 0.45);
+}
+.auth-field-in {
+  animation: list-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce), (hover: none) {
+  .auth-blob { animation: none; }
+}
+
+/* Кнопка с лёгким подъёмом при hover (Google-вход, «Заказать ещё» и т.п.) */
+.btn-lift {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.btn-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -8px rgba(20, 33, 61, 0.3);
+}
+.btn-lift:active {
+  transform: translateY(0);
+}
+
+/* Усиленная тень всей карточки для срочных (red) товаров — не только полоски */
+.card-urgent-glow {
+  animation: card-urgent-breathe 2.4s ease-in-out 0.5s infinite;
+}
+@keyframes card-urgent-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(188, 75, 52, 0); }
+  50%      { box-shadow: 0 6px 24px -6px rgba(188, 75, 52, 0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-urgent-glow { animation: none; }
+}

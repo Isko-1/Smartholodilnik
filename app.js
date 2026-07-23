@@ -15,6 +15,7 @@ const CATEGORIES = {
 };
 
 const STORAGE_KEY = "smart-fridge-products";
+const EVENTS_KEY = "smart-fridge-events";
 const FAMILY_KEY = "smart-fridge-family-sync";
 const FAVORITES_KEY = "smart-fridge-favorite-recipes";
 
@@ -98,6 +99,64 @@ function seedProducts() {
 }
 
 // ---------------------------------------------------------------------------
+// История: лог событий (добавлено / съедено / выброшено)
+// ---------------------------------------------------------------------------
+function loadLocalEvents() {
+  try { return JSON.parse(localStorage.getItem(EVENTS_KEY)) || []; }
+  catch (e) { return []; }
+}
+
+function saveLocalEvents(list) {
+  try { localStorage.setItem(EVENTS_KEY, JSON.stringify(list)); }
+  catch (e) { console.error("Ошибка сохранения истории:", e); }
+}
+
+/**
+ * Пишет событие в историю. В демо-режиме — в localStorage,
+ * при подключённом бэкенде — в таблицу product_events.
+ * action: 'added' | 'removed', reason: 'eaten' | 'discarded' | null
+ */
+async function logEvent(name, category, action, reason = null) {
+  const event = { id: uuid(), name, category, action, reason, at: Date.now(), by: memberName || null };
+
+  if (BACKEND_ENABLED && householdCode) {
+    const { error } = await sb.from("product_events").insert({
+      household_code: householdCode,
+      product_name: name,
+      category,
+      action,
+      reason,
+      by: memberName
+    });
+    if (error) console.error("Не удалось записать событие в историю:", error);
+    return;
+  }
+
+  const list = loadLocalEvents();
+  list.push(event);
+  saveLocalEvents(list);
+}
+
+async function fetchEventsForHistory() {
+  if (BACKEND_ENABLED && householdCode) {
+    const { data, error } = await sb
+      .from("product_events")
+      .select("*")
+      .eq("household_code", householdCode)
+      .order("occurred_at", { ascending: false });
+    if (error) {
+      console.error("Не удалось загрузить историю:", error);
+      return [];
+    }
+    return data.map(row => ({
+      id: row.id, name: row.product_name, category: row.category,
+      action: row.action, reason: row.reason, at: new Date(row.occurred_at).getTime(), by: row.by
+    }));
+  }
+  return loadLocalEvents().slice().sort((a, b) => b.at - a.at);
+}
+
+// ---------------------------------------------------------------------------
 // Tilt-card эффект
 // ---------------------------------------------------------------------------
 function attachTiltEffect(el, maxTilt = 7) {
@@ -143,14 +202,16 @@ function attachTiltEffect(el, maxTilt = 7) {
 // ---------------------------------------------------------------------------
 function getExpiry(product) {
   const cat = CATEGORIES[product.category] || CATEGORIES.other;
-  const expiresAt = product.addedAt + cat.days * 24 * 60 * 60 * 1000;
+  const expiresAt = product.expiryOverride
+    ? product.expiryOverride
+    : product.addedAt + cat.days * 24 * 60 * 60 * 1000;
   const msLeft = expiresAt - Date.now();
   const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
   let status;
   if (daysLeft <= 1) status = "red";
   else if (daysLeft <= 3) status = "yellow";
   else status = "green";
-  return { daysLeft, status };
+  return { daysLeft, status, expiresAt };
 }
 
 const STATUS_META = {
@@ -175,7 +236,7 @@ function escapeHtml(str) {
 // ---------------------------------------------------------------------------
 // Операции с продуктами
 // ---------------------------------------------------------------------------
-async function addProduct(name, category, quantity = 1, unit = "шт") {
+async function addProduct(name, category, quantity = 1, unit = "шт", expiryOverride = null) {
   if (BACKEND_ENABLED && householdCode) {
     const { data, error } = await sb.from("products").insert({
       household_code: householdCode,
@@ -184,7 +245,8 @@ async function addProduct(name, category, quantity = 1, unit = "шт") {
       quantity,
       unit,
       added_at: Date.now(),
-      added_by: memberName
+      added_by: memberName,
+      expiry_override: expiryOverride
     }).select().single();
     if (error) {
       console.error(error);
@@ -192,22 +254,27 @@ async function addProduct(name, category, quantity = 1, unit = "шт") {
       return;
     }
     if (data && !products.find(p => p.id === data.id)) {
-      products.push({ id: data.id, name: data.name, category: data.category, quantity: Number(data.quantity) || 1, unit: data.unit || "шт", addedAt: Number(data.added_at), addedBy: data.added_by });
+      products.push({ id: data.id, name: data.name, category: data.category, quantity: Number(data.quantity) || 1, unit: data.unit || "шт", addedAt: Number(data.added_at), addedBy: data.added_by, expiryOverride: data.expiry_override ? Number(data.expiry_override) : null });
       lastAddedId = data.id;
+      logEvent(data.name, data.category, "added");
       render();
       triggerFamilySyncPulse();
     }
   } else {
     const id = uuid();
-    products.push({ id, name, category, quantity, unit, addedAt: Date.now() });
+    products.push({ id, name, category, quantity, unit, addedAt: Date.now(), expiryOverride });
     lastAddedId = id;
+    logEvent(name, category, "added");
     saveProducts();
     render();
     triggerFamilySyncPulse();
   }
 }
 
-async function removeProduct(id) {
+async function removeProduct(id, reason = null) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
   if (BACKEND_ENABLED && householdCode) {
     const { error } = await sb.from("products").delete().eq("id", id);
     if (error) {
@@ -216,12 +283,37 @@ async function removeProduct(id) {
       return;
     }
     products = products.filter(p => p.id !== id);
+    await logEvent(product.name, product.category, "removed", reason);
     render();
   } else {
     products = products.filter(p => p.id !== id);
     saveProducts();
+    await logEvent(product.name, product.category, "removed", reason);
     render();
   }
+}
+
+/**
+ * Обновляет ручной срок годности продукта (expiryOverride) — и в
+ * Supabase (если подключён бэкенд), и в объекте продукта/localStorage.
+ */
+async function updateProductExpiry(id, expiryTimestamp) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
+  if (BACKEND_ENABLED && householdCode) {
+    const { error } = await sb.from("products").update({ expiry_override: expiryTimestamp }).eq("id", id);
+    if (error) {
+      console.error(error);
+      alert("Не удалось сохранить срок годности. Проверьте подключение.");
+      return;
+    }
+    product.expiryOverride = expiryTimestamp;
+  } else {
+    product.expiryOverride = expiryTimestamp;
+    saveProducts();
+  }
+  render();
 }
 
 // ---------------------------------------------------------------------------
@@ -265,9 +357,10 @@ function renderGrid() {
     const meta = STATUS_META[status];
 
     const card = document.createElement("div");
-    card.className = "group relative flex items-stretch bg-white/80 rounded-2xl shadow-sm border border-bone-dark overflow-hidden hover:bg-bone-dark/70 hover:border-navy/25 hover:shadow-lg transition-all duration-200 list-item-in";
+    card.className = "group relative flex flex-col bg-white/80 rounded-2xl shadow-sm border border-bone-dark overflow-hidden hover:bg-bone-dark/70 hover:border-navy/25 hover:shadow-lg transition-all duration-200 list-item-in";
     card.style.animationDelay = `${Math.min(index, 8) * 40}ms`;
     if (product.id === justAddedId) card.classList.add("list-item-fresh");
+    if (status === "red") card.classList.add("card-urgent-glow");
 
     const dayLabel = daysLeft < 0
       ? `Просрочен на ${Math.abs(daysLeft)} дн.`
@@ -276,31 +369,58 @@ function renderGrid() {
         : `${daysLeft} дн. осталось`;
 
     const qtyLabel = formatQty(product.quantity, product.unit);
+    const needsAction = status === "red" || status === "yellow";
 
     card.innerHTML = `
-      <div class="w-2.5 shrink-0 status-strip${meta.pulse ? " status-strip-urgent" : ""}" style="--status-color:${meta.ring}"></div>
-      <div class="flex-1 flex items-center gap-3 p-3.5">
-        <div class="relative w-12 h-12 shrink-0 rounded-xl flex items-center justify-center" style="background:${cat.color}22">
-          <i data-lucide="${cat.icon}" class="w-6 h-6" style="color:${cat.color}"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="font-display font-semibold text-navy truncate">${escapeHtml(product.name)}</p>
-          <p class="text-xs text-navy/50">${cat.label} · ${qtyLabel}${product.addedBy ? ` · добавил(а) ${escapeHtml(product.addedBy)}` : ""}</p>
-        </div>
-        <div class="text-right shrink-0">
-          <span class="inline-block text-[11px] font-mono font-semibold px-2 py-1 rounded-full ${meta.chip}">${dayLabel}</span>
-          <button data-id="${product.id}" class="delete-btn block ml-auto mt-1.5 text-navy/30 hover:text-terracotta transition-colors">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
+      <div class="flex items-stretch">
+        <div class="w-2.5 shrink-0 status-strip${meta.pulse ? " status-strip-urgent" : ""}" style="--status-color:${meta.ring}"></div>
+        <div class="flex-1 flex items-center gap-3 p-3.5">
+          <div class="relative w-12 h-12 shrink-0 rounded-xl flex items-center justify-center" style="background:${cat.color}22">
+            <i data-lucide="${cat.icon}" class="w-6 h-6" style="color:${cat.color}"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-display font-semibold text-navy truncate">${escapeHtml(product.name)}</p>
+            <p class="text-xs text-navy/50">${cat.label} · ${qtyLabel}${product.addedBy ? ` · добавил(а) ${escapeHtml(product.addedBy)}` : ""}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <button data-id="${product.id}" class="expiry-badge-btn inline-block text-[11px] font-mono font-semibold px-2 py-1 rounded-full ${meta.chip} hover:ring-2 hover:ring-navy/10 transition-shadow" title="Изменить срок вручную">${dayLabel}</button>
+            <button data-id="${product.id}" class="delete-btn block ml-auto mt-1.5 text-navy/30 hover:text-terracotta transition-colors">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
       </div>
+      ${needsAction ? `
+        <div class="flex gap-2 px-3.5 pb-3.5 -mt-0.5">
+          <button data-id="${product.id}" class="cook-for-product-btn btn-lift flex-1 bg-terracotta/12 hover:bg-terracotta/20 text-terracotta text-xs font-semibold rounded-xl px-3 py-2 flex items-center justify-center gap-1.5 transition-colors">
+            <i data-lucide="chef-hat" class="w-3.5 h-3.5"></i>Приготовить
+          </button>
+          <button data-id="${product.id}" class="order-more-btn btn-lift flex-1 bg-plum-light hover:bg-plum-light/70 text-plum-dark text-xs font-semibold rounded-xl px-3 py-2 flex items-center justify-center gap-1.5 transition-colors">
+            <i data-lucide="truck" class="w-3.5 h-3.5"></i>Заказать ещё
+          </button>
+        </div>` : ""}
     `;
     fridgeGrid.appendChild(card);
     attachTiltEffect(card, 5);
   });
 
   document.querySelectorAll(".delete-btn").forEach(btn => {
-    btn.addEventListener("click", () => removeProduct(btn.dataset.id));
+    btn.addEventListener("click", () => openRemoveReasonModal(btn.dataset.id));
+  });
+  document.querySelectorAll(".expiry-badge-btn").forEach(btn => {
+    btn.addEventListener("click", () => openExpiryEditModal(btn.dataset.id));
+  });
+  document.querySelectorAll(".cook-for-product-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const product = products.find(p => p.id === btn.dataset.id);
+      if (product) openRecipesFor([product]);
+    });
+  });
+  document.querySelectorAll(".order-more-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const product = products.find(p => p.id === btn.dataset.id);
+      if (product) openDeliveryFor(product);
+    });
   });
 }
 
@@ -332,12 +452,18 @@ function updateShelfLifeHint() {
 
 safeAddListener("product-category", "change", updateShelfLifeHint);
 
+safeAddListener("manual-expiry-toggle", "click", () => {
+  const field = document.getElementById("manual-expiry-field");
+  if (field) field.classList.toggle("hidden");
+});
+
 safeAddListener("add-form", "submit", (e) => {
   e.preventDefault();
   const nameInput = document.getElementById("product-name");
   const categorySelect = document.getElementById("product-category");
   const qtyInput = document.getElementById("product-qty");
   const unitSelect = document.getElementById("product-unit");
+  const manualExpiryInput = document.getElementById("manual-expiry-input");
 
   if (!nameInput) return;
   const name = nameInput.value.trim();
@@ -346,10 +472,16 @@ safeAddListener("add-form", "submit", (e) => {
   const quantity = parseFloat(qtyInput ? qtyInput.value : "1") || 1;
   const category = categorySelect ? categorySelect.value : "other";
   const unit = unitSelect ? unitSelect.value : "шт";
+  const expiryOverride = manualExpiryInput && manualExpiryInput.value
+    ? new Date(manualExpiryInput.value + "T23:59:59").getTime()
+    : null;
 
-  addProduct(name, category, quantity, unit);
+  addProduct(name, category, quantity, unit, expiryOverride);
   nameInput.value = "";
   if (qtyInput) qtyInput.value = "1";
+  if (manualExpiryInput) manualExpiryInput.value = "";
+  const manualField = document.getElementById("manual-expiry-field");
+  if (manualField) manualField.classList.add("hidden");
   nameInput.focus();
 });
 
@@ -645,7 +777,8 @@ async function fetchProductsFromBackend() {
   products = data.map(row => ({
     id: row.id, name: row.name, category: row.category,
     quantity: Number(row.quantity) || 1, unit: row.unit || "шт",
-    addedAt: Number(row.added_at), addedBy: row.added_by
+    addedAt: Number(row.added_at), addedBy: row.added_by,
+    expiryOverride: row.expiry_override ? Number(row.expiry_override) : null
   }));
 }
 
@@ -662,14 +795,14 @@ async function subscribeToProductChanges() {
       if (payload.eventType === "INSERT") {
         const row = payload.new;
         if (!products.find(p => p.id === row.id)) {
-          products.push({ id: row.id, name: row.name, category: row.category, quantity: Number(row.quantity) || 1, unit: row.unit || "шт", addedAt: Number(row.added_at), addedBy: row.added_by });
+          products.push({ id: row.id, name: row.name, category: row.category, quantity: Number(row.quantity) || 1, unit: row.unit || "шт", addedAt: Number(row.added_at), addedBy: row.added_by, expiryOverride: row.expiry_override ? Number(row.expiry_override) : null });
         }
       } else if (payload.eventType === "DELETE") {
         products = products.filter(p => p.id !== payload.old.id);
       } else if (payload.eventType === "UPDATE") {
         const row = payload.new;
         const idx = products.findIndex(p => p.id === row.id);
-        if (idx >= 0) products[idx] = { id: row.id, name: row.name, category: row.category, quantity: Number(row.quantity) || 1, unit: row.unit || "шт", addedAt: Number(row.added_at), addedBy: row.added_by };
+        if (idx >= 0) products[idx] = { id: row.id, name: row.name, category: row.category, quantity: Number(row.quantity) || 1, unit: row.unit || "шт", addedAt: Number(row.added_at), addedBy: row.added_by, expiryOverride: row.expiry_override ? Number(row.expiry_override) : null };
       }
       render();
     });
@@ -916,10 +1049,81 @@ function renderFavoritesPage() {
 }
 
 // ---------------------------------------------------------------------------
+// История: рендер таймлайна
+// ---------------------------------------------------------------------------
+const HISTORY_ACTION_META = {
+  added:     { label: "Добавлено",  icon: "plus-circle", chip: "bg-navy/8 text-navy/60" },
+  eaten:     { label: "Съедено",    icon: "utensils",    chip: "bg-sage/15 text-sage" },
+  discarded: { label: "Выброшено",  icon: "trash-2",     chip: "bg-terracotta/15 text-terracotta" }
+};
+
+function historyDayLabel(timestamp) {
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  if (sameDay(date, today)) return "Сегодня";
+  if (sameDay(date, yesterday)) return "Вчера";
+  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
+async function renderHistoryPage() {
+  const listEl = document.getElementById("history-list");
+  const emptyEl = document.getElementById("history-empty");
+  if (!listEl) return;
+
+  listEl.innerHTML = `<div class="text-center py-8"><i data-lucide="loader-2" class="w-6 h-6 mx-auto text-cognac animate-spin"></i></div>`;
+  if (window.lucide) lucide.createIcons();
+
+  const events = await fetchEventsForHistory();
+  if (emptyEl) emptyEl.classList.toggle("hidden", events.length > 0);
+  if (events.length === 0) {
+    listEl.innerHTML = "";
+    return;
+  }
+
+  const groups = [];
+  events.forEach(ev => {
+    const label = historyDayLabel(ev.at);
+    let group = groups.find(g => g.label === label);
+    if (!group) { group = { label, items: [] }; groups.push(group); }
+    group.items.push(ev);
+  });
+
+  listEl.innerHTML = groups.map(group => `
+    <div>
+      <p class="text-xs font-semibold text-navy/40 uppercase tracking-wide mb-2">${escapeHtml(group.label)}</p>
+      <div class="space-y-2">
+        ${group.items.map((ev, i) => {
+          const cat = CATEGORIES[ev.category] || CATEGORIES.other;
+          const meta = ev.action === "added" ? HISTORY_ACTION_META.added : (HISTORY_ACTION_META[ev.reason] || HISTORY_ACTION_META.discarded);
+          const time = new Date(ev.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+          return `
+            <div class="flex items-center gap-3 bg-white/70 border border-bone-dark rounded-xl px-3 py-2.5 list-item-in" style="animation-delay:${Math.min(i, 8) * 30}ms">
+              <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center" style="background:${cat.color}22">
+                <i data-lucide="${cat.icon}" class="w-4.5 h-4.5" style="color:${cat.color}"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-navy truncate">${escapeHtml(ev.name)}</p>
+                <p class="text-xs text-navy/40">${time}${ev.by ? ` · ${escapeHtml(ev.by)}` : ""}</p>
+              </div>
+              <span class="text-[11px] font-medium px-2 py-1 rounded-full ${meta.chip} shrink-0 flex items-center gap-1">
+                <i data-lucide="${meta.icon}" class="w-3 h-3"></i>${meta.label}
+              </span>
+            </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `).join("");
+  if (window.lucide) lucide.createIcons();
+}
+
+// ---------------------------------------------------------------------------
 // Навигация
 // ---------------------------------------------------------------------------
 function showPage(name) {
-  ["home", "favorites", "profile"].forEach(p => {
+  ["home", "history", "favorites", "profile"].forEach(p => {
     const el = document.getElementById(`page-${p}`);
     if (el) el.classList.toggle("hidden", p !== name);
   });
@@ -928,6 +1132,7 @@ function showPage(name) {
     else btn.removeAttribute("aria-current");
   });
   if (name === "favorites") renderFavoritesPage();
+  if (name === "history") renderHistoryPage();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -938,11 +1143,20 @@ document.querySelectorAll(".nav-button").forEach(btn => {
 // ---------------------------------------------------------------------------
 // «Что приготовить?»
 // ---------------------------------------------------------------------------
-safeAddListener("cook-btn", "click", async () => {
-  openModal();
+safeAddListener("cook-btn", "click", () => {
   const priority = products.filter(p => ["red", "yellow"].includes(getExpiry(p).status));
+  openRecipesFor(priority);
+});
 
-  if (priority.length === 0) {
+/**
+ * Открывает модалку рецептов, подобранных под конкретный список продуктов.
+ * Используется и общей кнопкой «Что приготовить?» (весь приоритетный список),
+ * и кнопкой «Приготовить» на отдельной карточке товара (список из одного).
+ */
+async function openRecipesFor(priority) {
+  openModal();
+
+  if (!priority || priority.length === 0) {
     showRecipeSourceNote("");
     renderRecipes([]);
     return;
@@ -966,9 +1180,9 @@ safeAddListener("cook-btn", "click", async () => {
   }
 
   showRecipeSourceNote("");
-  const withStatus = products.map(p => ({ name: p.name, status: getExpiry(p).status }));
+  const withStatus = priority.map(p => ({ name: p.name, status: getExpiry(p).status }));
   renderRecipes(matchRecipes(withStatus));
-});
+}
 
 function showRecipeSourceNote(text) {
   const noteEl = document.getElementById("recipe-source-note");
@@ -990,8 +1204,8 @@ function renderApiRecipes(recipes) {
   const recipeResults = document.getElementById("recipe-results");
   if (!recipeResults) return;
 
-  recipeResults.innerHTML = recipes.map(r => `
-    <div class="border border-bone-dark rounded-2xl overflow-hidden bg-bone/60" data-recipe-id="${r.id}">
+  recipeResults.innerHTML = recipes.map((r, i) => `
+    <div class="border border-bone-dark rounded-2xl overflow-hidden bg-bone/60 list-item-in" style="animation-delay:${Math.min(i, 6) * 50}ms" data-recipe-id="${r.id}">
       <div class="flex gap-3 p-4">
         ${r.image ? `<img src="${escapeHtml(r.image)}" alt="" class="w-16 h-16 rounded-xl object-cover shrink-0 bg-bone-dark">` : ""}
         <div class="flex-1 min-w-0">
@@ -1107,8 +1321,8 @@ function renderRecipes(matches) {
     return;
   }
 
-  recipeResults.innerHTML = matches.map(({ recipe, matched, score }) => `
-    <div class="border border-bone-dark rounded-2xl p-4 bg-bone/60">
+  recipeResults.innerHTML = matches.map(({ recipe, matched, score }, i) => `
+    <div class="border border-bone-dark rounded-2xl p-4 bg-bone/60 list-item-in" style="animation-delay:${Math.min(i, 6) * 50}ms">
       <div class="flex items-start justify-between gap-3">
         <h3 class="font-display font-semibold text-lg text-navy">${escapeHtml(recipe.title)}</h3>
         <div class="flex items-center gap-1.5 shrink-0">
@@ -1171,6 +1385,101 @@ safeAddListener("recipe-modal-close", "click", closeModal);
 safeAddListener("recipe-modal", "click", (e) => {
   if (e.target === document.getElementById("recipe-modal")) closeModal();
 });
+
+// ---------------------------------------------------------------------------
+// Мелкие модалки: причина удаления / ручной срок / статус доставки
+// ---------------------------------------------------------------------------
+function openSmallModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    const panel = modal.querySelector(".modal-panel");
+    if (panel) panel.classList.remove("translate-y-6", "opacity-0");
+  });
+}
+
+function closeSmallModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  const panel = modal.querySelector(".modal-panel");
+  if (panel) panel.classList.add("translate-y-6", "opacity-0");
+  setTimeout(() => modal.classList.add("hidden"), 200);
+}
+
+let pendingRemoveId = null;
+
+function openRemoveReasonModal(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  pendingRemoveId = id;
+  const nameEl = document.getElementById("remove-reason-name");
+  if (nameEl) nameEl.textContent = product.name;
+  openSmallModal("remove-reason-modal");
+}
+
+safeAddListener("remove-reason-eaten", "click", () => {
+  if (pendingRemoveId) removeProduct(pendingRemoveId, "eaten");
+  pendingRemoveId = null;
+  closeSmallModal("remove-reason-modal");
+});
+safeAddListener("remove-reason-discarded", "click", () => {
+  if (pendingRemoveId) removeProduct(pendingRemoveId, "discarded");
+  pendingRemoveId = null;
+  closeSmallModal("remove-reason-modal");
+});
+safeAddListener("remove-reason-cancel", "click", () => {
+  pendingRemoveId = null;
+  closeSmallModal("remove-reason-modal");
+});
+
+let pendingExpiryId = null;
+
+function openExpiryEditModal(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  pendingExpiryId = id;
+  const nameEl = document.getElementById("expiry-edit-name");
+  const input = document.getElementById("expiry-edit-input");
+  if (nameEl) nameEl.textContent = product.name;
+  if (input) {
+    const { expiresAt } = getExpiry(product);
+    input.value = new Date(expiresAt).toISOString().slice(0, 10);
+  }
+  openSmallModal("expiry-edit-modal");
+}
+
+safeAddListener("expiry-edit-save", "click", () => {
+  const input = document.getElementById("expiry-edit-input");
+  if (pendingExpiryId && input && input.value) {
+    const timestamp = new Date(input.value + "T23:59:59").getTime();
+    updateProductExpiry(pendingExpiryId, timestamp);
+  }
+  pendingExpiryId = null;
+  closeSmallModal("expiry-edit-modal");
+});
+safeAddListener("expiry-edit-cancel", "click", () => {
+  pendingExpiryId = null;
+  closeSmallModal("expiry-edit-modal");
+});
+
+function openDeliveryFor(product) {
+  const configured = typeof DELIVERY_CONFIG !== "undefined" && DELIVERY_CONFIG.enabled;
+  const url = configured ? DELIVERY_CONFIG.buildSearchUrl(product.name) : null;
+
+  if (configured && url) {
+    window.open(url, "_blank", "noopener");
+    return;
+  }
+
+  const titleEl = document.getElementById("delivery-modal-title");
+  const textEl = document.getElementById("delivery-modal-text");
+  if (titleEl) titleEl.textContent = "Партнёры пока не подключены";
+  if (textEl) textEl.textContent = `Как только появится партнёрская программа доставки, эта кнопка начнёт открывать поиск «${product.name}» у партнёра.`;
+  openSmallModal("delivery-modal");
+}
+
+safeAddListener("delivery-modal-close", "click", () => closeSmallModal("delivery-modal"));
 
 // ---------------------------------------------------------------------------
 // Экран авторизации

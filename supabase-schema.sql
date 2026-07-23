@@ -168,3 +168,56 @@ begin
     alter publication supabase_realtime add table products;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Дополнение v4: кастомный срок годности + история (product_events)
+-- Уже выполняли v1-v3? Пересоздавать всё не нужно — выполните только этот блок.
+-- ---------------------------------------------------------------------------
+
+-- Кастомный срок годности (перекрывает автоматический расчёт по категории)
+alter table products add column if not exists expiry_override bigint;
+
+-- Лог событий: добавление и удаление (съедено/выброшено) продуктов
+create table if not exists product_events (
+  id uuid primary key default gen_random_uuid(),
+  household_code text not null references households(code) on delete cascade,
+  product_name text not null,
+  category text not null,
+  action text not null check (action in ('added','removed')),
+  reason text check (reason in ('eaten','discarded') or reason is null),
+  occurred_at timestamptz not null default now(),
+  by text
+);
+
+create index if not exists product_events_household_idx on product_events (household_code);
+
+alter table product_events enable row level security;
+
+drop policy if exists "members can view events of their household" on product_events;
+create policy "members can view events of their household" on product_events
+  for select using (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_events.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "members can add events to their household" on product_events;
+create policy "members can add events to their household" on product_events
+  for insert with check (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_events.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+-- Realtime для истории (необязательно — можно включить позже без переделок)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'product_events'
+  ) then
+    alter publication supabase_realtime add table product_events;
+  end if;
+end $$;

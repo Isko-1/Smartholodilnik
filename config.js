@@ -22,3 +22,23 @@ const SUPABASE_CONFIG = {
   url: "https://jlfvsjibqiieiuvevfqn.supabase.co",
   anonKey: "sb_publishable_A_nUW50CayqQXxzGB3DpfQ_CFrfZbm2"
 };
+
+/**
+ * Настройки партнёра по доставке (кнопка «Заказать ещё» на карточке продукта).
+ *
+ * Партнёров пока нет — enabled: false, и кнопка честно показывает модалку
+ * «партнёры пока не подключены». Как только появится партнёрская программа
+ * (Wolt, Chocofood и т.п.) — правите только этот блок:
+ *
+ *   1. enabled: true
+ *   2. partnerName: "Название партнёра"
+ *   3. buildSearchUrl: (productName) => `https://partner.example/search?q=${encodeURIComponent(productName)}`
+ *
+ * Больше никакой код трогать не нужно — кнопка сама начнёт открывать
+ * реальный поиск товара у партнёра в новой вкладке.
+ */
+const DELIVERY_CONFIG = {
+  enabled: false,
+  partnerName: "",
+  buildSearchUrl: (productName) => null
+};

@@ -73,8 +73,10 @@
 </header>
 
 <!-- Auth: вход / регистрация / Google / восстановление пароля (только в режиме реального бэкенда) -->
-<div id="auth-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-navy/50 backdrop-blur-sm p-4">
-  <div class="bg-bone w-full max-w-sm rounded-3xl p-6 shadow-xl">
+<div id="auth-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center auth-bg p-4">
+  <div class="auth-blob auth-blob-cognac" aria-hidden="true"></div>
+  <div class="auth-blob auth-blob-plum" aria-hidden="true"></div>
+  <div class="auth-card relative bg-bone/80 w-full max-w-sm rounded-3xl p-6">
     <div class="w-11 h-11 rounded-2xl bg-cognac/15 flex items-center justify-center mb-3">
       <i data-lucide="lock" class="w-5 h-5 text-cognac-dark"></i>
     </div>
@@ -90,12 +92,12 @@
       </div>
 
       <form id="auth-form" class="space-y-3">
-        <div>
+        <div class="auth-field-in" style="animation-delay:40ms">
           <label class="text-xs text-navy/50 mb-1 block">Email</label>
           <input id="auth-email-input" type="email" required autocomplete="email" placeholder="you@example.com"
             class="w-full bg-white border border-bone-dark rounded-xl px-3.5 py-2.5 text-sm focus:border-cognac transition-colors">
         </div>
-        <div>
+        <div class="auth-field-in" style="animation-delay:90ms">
           <label class="text-xs text-navy/50 mb-1 block">Пароль</label>
           <input id="auth-password-input" type="password" required minlength="6" autocomplete="current-password" placeholder="Минимум 6 символов"
             class="w-full bg-white border border-bone-dark rounded-xl px-3.5 py-2.5 text-sm focus:border-cognac transition-colors">
@@ -117,7 +119,7 @@
         <div class="flex-1 h-px bg-bone-dark"></div>
       </div>
 
-      <button id="google-auth-btn" type="button" class="w-full bg-white hover:bg-bone-dark/40 text-navy font-medium text-sm rounded-xl px-5 py-2.5 flex items-center justify-center gap-2.5 border border-bone-dark transition-colors">
+      <button id="google-auth-btn" type="button" class="btn-lift auth-field-in w-full bg-white hover:bg-bone-dark/40 text-navy font-medium text-sm rounded-xl px-5 py-2.5 flex items-center justify-center gap-2.5 border border-bone-dark shadow-sm transition-colors" style="animation-delay:140ms">
         <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.7 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.3 0 10.2-2 13.9-5.4l-6.4-5.4C29.4 34.8 26.8 36 24 36c-5.4 0-9.9-3.3-11.4-8l-6.6 5.1C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.4-2.3 4.4-4.3 5.9l6.4 5.4C39.9 37 44 31.4 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
         Продолжить с Google
       </button>
@@ -266,6 +268,13 @@
       </button>
     </form>
     <p id="shelf-life-hint" class="text-xs text-navy/45 mt-2"></p>
+
+    <button type="button" id="manual-expiry-toggle" class="text-xs text-cognac-dark hover:underline mt-2">Указать срок вручную</button>
+    <div id="manual-expiry-field" class="hidden mt-2">
+      <label class="text-xs text-navy/50 mb-1 block">Срок годности истекает</label>
+      <input id="manual-expiry-input" type="date"
+        class="w-full sm:w-52 bg-bone border border-bone-dark rounded-xl px-3.5 py-2.5 text-sm focus:border-cognac transition-colors">
+    </div>
   </section>
 
   <!-- Регулярные покупки -->
@@ -313,6 +322,21 @@
 
 </div>
 <!-- /page-home -->
+
+<!-- Page: История (таймлайн добавленных/съеденных/выброшенных продуктов) -->
+<div id="page-history" class="hidden space-y-4 pb-2">
+  <h1 class="font-display font-semibold text-xl flex items-center gap-2">
+    <i data-lucide="history" class="w-5 h-5 text-plum"></i>
+    История
+  </h1>
+  <p class="text-sm text-navy/50 -mt-2">Что покупали, съели и выбросили</p>
+  <div id="history-list" class="space-y-5"></div>
+  <div id="history-empty" class="hidden text-center py-12 border border-dashed border-bone-dark rounded-2xl">
+    <i data-lucide="history" class="w-9 h-9 mx-auto text-navy/25 mb-2"></i>
+    <p class="text-navy/50 text-sm">Пока пусто — здесь появится история покупок и того, что вы съели или выбросили</p>
+  </div>
+</div>
+<!-- /page-history -->
 
 <!-- Page: Избранное (сохранённые рецепты) -->
 <div id="page-favorites" class="hidden space-y-4 pb-2">
@@ -437,10 +461,14 @@
 
 <!-- Bottom navigation -->
 <nav id="bottom-nav" class="fixed bottom-0 inset-x-0 z-30 bg-bone/95 backdrop-blur border-t border-bone-dark">
-  <div class="max-w-3xl mx-auto grid grid-cols-3 h-[70px]">
+  <div class="max-w-3xl mx-auto grid grid-cols-4 h-[70px]">
     <button type="button" class="nav-button" data-page="home" aria-current="page">
       <span class="nav-icon-frame"><i data-lucide="refrigerator" class="w-5 h-5"></i></span>
       <span class="nav-label">Холодильник</span>
+    </button>
+    <button type="button" class="nav-button" data-page="history">
+      <span class="nav-icon-frame"><i data-lucide="history" class="w-5 h-5"></i></span>
+      <span class="nav-label">История</span>
     </button>
     <button type="button" class="nav-button" data-page="favorites">
       <span class="nav-icon-frame"><i data-lucide="heart" class="w-5 h-5"></i></span>
@@ -478,6 +506,48 @@
       </button>
     </div>
     <div id="recipe-results" class="p-5 space-y-3 overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- Модалка: причина удаления продукта (для истории) -->
+<div id="remove-reason-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
+  <div class="modal-panel translate-y-6 opacity-0 bg-bone w-full max-w-xs rounded-3xl p-5 shadow-xl text-center">
+    <p id="remove-reason-name" class="font-display font-semibold text-navy mb-1"></p>
+    <p class="text-xs text-navy/50 mb-4">Как поступили с этим продуктом?</p>
+    <div class="flex gap-2">
+      <button id="remove-reason-eaten" type="button" class="flex-1 bg-sage/15 hover:bg-sage/25 text-sage font-medium text-sm rounded-xl px-3 py-2.5 flex flex-col items-center gap-1 transition-colors">
+        <i data-lucide="utensils" class="w-4.5 h-4.5"></i>Съедено
+      </button>
+      <button id="remove-reason-discarded" type="button" class="flex-1 bg-terracotta/15 hover:bg-terracotta/25 text-terracotta font-medium text-sm rounded-xl px-3 py-2.5 flex flex-col items-center gap-1 transition-colors">
+        <i data-lucide="trash-2" class="w-4.5 h-4.5"></i>Выброшено
+      </button>
+    </div>
+    <button id="remove-reason-cancel" type="button" class="w-full text-xs text-navy/40 hover:text-navy transition-colors mt-3 py-1">Отмена</button>
+  </div>
+</div>
+
+<!-- Модалка: ручная правка срока годности -->
+<div id="expiry-edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
+  <div class="modal-panel translate-y-6 opacity-0 bg-bone w-full max-w-xs rounded-3xl p-5 shadow-xl">
+    <p id="expiry-edit-name" class="font-display font-semibold text-navy mb-1"></p>
+    <p class="text-xs text-navy/50 mb-3">Укажите точную дату истечения срока</p>
+    <input id="expiry-edit-input" type="date" class="w-full bg-white border border-bone-dark rounded-xl px-3.5 py-2.5 text-sm focus:border-cognac transition-colors">
+    <div class="flex gap-2 mt-4">
+      <button id="expiry-edit-save" type="button" class="flex-1 bg-navy hover:bg-navy/90 text-bone font-medium text-sm rounded-xl px-4 py-2.5 transition-colors">Сохранить</button>
+      <button id="expiry-edit-cancel" type="button" class="text-xs text-navy/40 hover:text-navy transition-colors px-3">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: «Заказать ещё» — статус партнёрской доставки -->
+<div id="delivery-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
+  <div class="modal-panel translate-y-6 opacity-0 bg-bone w-full max-w-xs rounded-3xl p-5 shadow-xl text-center">
+    <div class="w-11 h-11 mx-auto rounded-2xl bg-plum-light flex items-center justify-center mb-3">
+      <i data-lucide="truck" class="w-5 h-5 text-plum-dark"></i>
+    </div>
+    <p id="delivery-modal-title" class="font-display font-semibold text-navy mb-1">Партнёры пока не подключены</p>
+    <p id="delivery-modal-text" class="text-sm text-navy/55 mb-4">Как только появится партнёрская программа доставки, эта кнопка начнёт открывать поиск нужного продукта у партнёра.</p>
+    <button id="delivery-modal-close" type="button" class="w-full bg-navy hover:bg-navy/90 text-bone font-medium text-sm rounded-xl px-4 py-2.5 transition-colors">Понятно</button>
   </div>
 </div>
 
