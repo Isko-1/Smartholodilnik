@@ -1,19 +1,6 @@
 -- ---------------------------------------------------------------------------
--- Умный холодильник — схема базы данных (v3, с настоящей авторизацией)
+-- Умный холодильник — схема базы данных (финальная рабочая версия)
 -- Выполните целиком в Supabase Dashboard → SQL Editor → New query
---
--- ВАЖНО: перед выполнением включите провайдеры входа:
--- Authentication → Sign In / Providers → Email → Enable (обычно включён по умолчанию)
--- Authentication → Sign In / Providers → Google → Enable (см. README, как получить
--- Client ID/Secret в Google Cloud Console)
---
--- auth.uid() теперь берётся из настоящей учётной записи пользователя
--- (email+пароль или Google), а не из анонимной сессии браузера — доступ
--- к семье привязан к аккаунту человека, а не к конкретному устройству.
---
--- Если вы уже выполняли предыдущую версию этого файла (v1/v2), не нужно
--- пересоздавать всё заново — просто выполните блок «Дополнение v3» в самом
--- низу файла, он добавляет только то, чего не было раньше.
 -- ---------------------------------------------------------------------------
 
 create table if not exists households (
@@ -31,8 +18,6 @@ create table if not exists products (
   created_at timestamptz default now()
 );
 
--- Кто состоит в какой семье. user_id берётся из анонимной сессии Supabase Auth
--- (стабилен для конкретного браузера/устройства, пока не очищено хранилище).
 create table if not exists household_members (
   household_code text not null references households(code) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -41,17 +26,31 @@ create table if not exists household_members (
   primary key (household_code, user_id)
 );
 
+create table if not exists api_usage (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  day date not null default current_date,
+  count int not null default 0,
+  primary key (user_id, day)
+);
+
+-- Индексы
 create index if not exists products_household_idx on products (household_code);
 create index if not exists members_user_idx on household_members (user_id);
 
 -- ---------------------------------------------------------------------------
--- Row Level Security: видно и редактируемо только то, что относится
--- к семьям, участником которых является текущий пользователь
+-- Включение Row Level Security (RLS)
 -- ---------------------------------------------------------------------------
 alter table households enable row level security;
 alter table products enable row level security;
 alter table household_members enable row level security;
+alter table api_usage enable row level security;
 
+-- ---------------------------------------------------------------------------
+-- Пересоздание политик доступа (RLS)
+-- ---------------------------------------------------------------------------
+
+-- 1. Households
+drop policy if exists "members can view their household" on households;
 create policy "members can view their household" on households
   for select using (
     exists (
@@ -60,12 +59,17 @@ create policy "members can view their household" on households
     )
   );
 
+-- 2. Household Members
+drop policy if exists "members can view their membership rows" on household_members;
 create policy "members can view their membership rows" on household_members
   for select using (user_id = auth.uid());
 
+drop policy if exists "members can leave their household" on household_members;
 create policy "members can leave their household" on household_members
   for delete using (user_id = auth.uid());
 
+-- 3. Products
+drop policy if exists "members can view products of their household" on products;
 create policy "members can view products of their household" on products
   for select using (
     exists (
@@ -74,6 +78,7 @@ create policy "members can view products of their household" on products
     )
   );
 
+drop policy if exists "members can add products to their household" on products;
 create policy "members can add products to their household" on products
   for insert with check (
     exists (
@@ -82,6 +87,7 @@ create policy "members can add products to their household" on products
     )
   );
 
+drop policy if exists "members can update products of their household" on products;
 create policy "members can update products of their household" on products
   for update using (
     exists (
@@ -90,6 +96,8 @@ create policy "members can update products of their household" on products
     )
   );
 
+-- ИСПРАВЛЕНО: удалять продукты могут только члены хозяйства по household_code
+drop policy if exists "members can delete products of their household" on products;
 create policy "members can delete products of their household" on products
   for delete using (
     exists (
@@ -98,11 +106,13 @@ create policy "members can delete products of their household" on products
     )
   );
 
+-- 4. API Usage
+drop policy if exists "users manage their own api usage" on api_usage;
+create policy "users manage their own api usage" on api_usage
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
 -- ---------------------------------------------------------------------------
--- SECURITY DEFINER функции: единственный способ создать семью или
--- присоединиться к ней. Работают в обход RLS ровно настолько, чтобы можно
--- было проверить существование кода и добавить самого себя в участники —
--- и ни байтом больше.
+-- Функции SECURITY DEFINER
 -- ---------------------------------------------------------------------------
 create or replace function create_household(p_code text, p_display_name text)
 returns void
@@ -147,45 +157,14 @@ grant execute on function create_household(text, text) to anon, authenticated;
 grant execute on function join_household(text, text) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- Realtime: включаем стриминг изменений products.
--- Supabase Realtime сам уважает RLS выше — participant увидит только
--- изменения в своей семье.
+-- Realtime
 -- ---------------------------------------------------------------------------
--- ---------------------------------------------------------------------------
--- Дневной лимит вызовов Spoonacular на пользователя — защищает общую
--- (небольшую) дневную квоту API от того, что один аккаунт съест её всю
--- за раз. Используется только Edge Function supabase/functions/recipes.
--- ---------------------------------------------------------------------------
-create table if not exists api_usage (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  day date not null default current_date,
-  count int not null default 0,
-  primary key (user_id, day)
-);
-
-alter table api_usage enable row level security;
-
-create policy "users manage their own api usage" on api_usage
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-alter publication supabase_realtime add table products;
-
--- ---------------------------------------------------------------------------
--- Дополнение v3 — выполните ЭТОТ блок отдельно, если у вас уже была
--- применена версия v1/v2 схемы (создание таблиц выше упадёт с ошибкой
--- "already exists", а этот блок безопасно выполнить повторно).
--- ---------------------------------------------------------------------------
-drop policy if exists "members can leave their household" on household_members;
-create policy "members can leave their household" on household_members
-  for delete using (user_id = auth.uid());
-
-create table if not exists api_usage (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  day date not null default current_date,
-  count int not null default 0,
-  primary key (user_id, day)
-);
-alter table api_usage enable row level security;
-drop policy if exists "users manage their own api usage" on api_usage;
-create policy "users manage their own api usage" on api_usage
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and tablename = 'products'
+  ) then
+    alter publication supabase_realtime add table products;
+  end if;
+end $$;
