@@ -457,19 +457,30 @@ function subscribeToProductChanges() {
 }
 
 function subscribeToPresence() {
+  if (presenceChannelRef) {
+    sb.removeChannel(presenceChannelRef);
+    presenceChannelRef = null;
+  }
+  
   const memberId = currentUser ? currentUser.id : uuid();
-  const presenceChannel = sb.channel(`presence-${householdCode}`, {
+  const channel = sb.channel(`presence-${householdCode}`, {
     config: { presence: { key: memberId } }
   });
-  presenceChannel
-    .on("presence", { event: "sync" }, () => {
-      renderPresence(presenceChannel.presenceState());
-    })
-    .subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        await presenceChannel.track({ name: memberName, joinedAt: Date.now() });
-      }
-    });
+
+  // 1. Сначала подписываемся на события присутствия (.on)
+  channel.on("presence", { event: "sync" }, () => {
+    renderPresence(channel.presenceState());
+  });
+
+  // 2. Сохраняем ссылку на канал
+  presenceChannelRef = channel;
+
+  // 3. И только ПОСЛЕ настройки .on() вызываем .subscribe()
+  channel.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") {
+      await channel.track({ name: memberName, joinedAt: Date.now() });
+    }
+  });
 }
 
 function renderPresence(state) {
