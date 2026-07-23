@@ -28,8 +28,24 @@ create table if not exists products (
   category text not null,
   added_at bigint not null,
   added_by text,
+  expires_at bigint,              -- если задано вручную, перекрывает авторасчёт по категории
   created_at timestamptz default now()
 );
+
+-- История: одна строка на весь жизненный цикл продукта (что купили и когда
+-- убрали). Не зависит от products — переживает удаление самой строки в
+-- products, поэтому это отдельная таблица, а не производная от неё.
+create table if not exists product_history (
+  id uuid primary key,            -- тот же id, что был у строки в products
+  household_code text not null references households(code) on delete cascade,
+  name text not null,
+  category text not null,
+  added_at bigint not null,
+  removed_at bigint,               -- null, пока продукт ещё в холодильнике
+  added_by text,
+  created_at timestamptz default now()
+);
+create index if not exists history_household_idx on product_history (household_code, added_at desc);
 
 -- Кто состоит в какой семье. user_id берётся из анонимной сессии Supabase Auth
 -- (стабилен для конкретного браузера/устройства, пока не очищено хранилище).
@@ -95,6 +111,32 @@ create policy "members can delete products of their household" on products
     exists (
       select 1 from household_members hm
       where hm.household_code = products.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+alter table product_history enable row level security;
+
+create policy "members can view history of their household" on product_history
+  for select using (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_history.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+create policy "members can add history rows for their household" on product_history
+  for insert with check (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_history.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+create policy "members can close out history rows of their household" on product_history
+  for update using (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_history.household_code and hm.user_id = auth.uid()
     )
   );
 
@@ -189,3 +231,50 @@ alter table api_usage enable row level security;
 drop policy if exists "users manage their own api usage" on api_usage;
 create policy "users manage their own api usage" on api_usage
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- ---------------------------------------------------------------------------
+-- Дополнение v4 — свой срок годности + история покупок. Безопасно выполнить
+-- повторно, если часть уже применена.
+-- ---------------------------------------------------------------------------
+alter table products add column if not exists expires_at bigint;
+
+create table if not exists product_history (
+  id uuid primary key,
+  household_code text not null references households(code) on delete cascade,
+  name text not null,
+  category text not null,
+  added_at bigint not null,
+  removed_at bigint,
+  added_by text,
+  created_at timestamptz default now()
+);
+create index if not exists history_household_idx on product_history (household_code, added_at desc);
+
+alter table product_history enable row level security;
+
+drop policy if exists "members can view history of their household" on product_history;
+create policy "members can view history of their household" on product_history
+  for select using (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_history.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "members can add history rows for their household" on product_history;
+create policy "members can add history rows for their household" on product_history
+  for insert with check (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_history.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "members can close out history rows of their household" on product_history;
+create policy "members can close out history rows of their household" on product_history
+  for update using (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = product_history.household_code and hm.user_id = auth.uid()
+    )
+  );
