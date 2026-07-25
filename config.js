@@ -14,11 +14,10 @@
  *    на GitHub Pages). Без этого шага вход через Google и восстановление
  *    пароля будут перенаправлять не туда.
  *
- * Пока здесь стоят пустые значения — приложение работает в локальном
- * демо-режиме (данные хранятся только в этом браузере, без синхронизации
- * и без входа в аккаунт).
+ * Приложение всегда работает через Supabase — без него вход и холодильник
+ * не откроются (демо-режим убран, см. README.md).
  */
-const SUPABASE_CONFIG = {
+export const SUPABASE_CONFIG = {
   url: "https://jlfvsjibqiieiuvevfqn.supabase.co",
   anonKey: "sb_publishable_A_nUW50CayqQXxzGB3DpfQ_CFrfZbm2"
 };
@@ -37,7 +36,7 @@ const SUPABASE_CONFIG = {
  * Больше никакой код трогать не нужно — кнопка сама начнёт открывать
  * реальный поиск товара у партнёра в новой вкладке.
  */
-const DELIVERY_CONFIG = {
+export const DELIVERY_CONFIG = {
   enabled: false,
   partnerName: "",
   buildSearchUrl: (productName) => null

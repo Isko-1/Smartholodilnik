@@ -221,3 +221,60 @@ begin
     alter publication supabase_realtime add table product_events;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Дополнение v5: регулярные покупки (regulars)
+-- Раньше список «покупать регулярно» лежал только в localStorage браузера —
+-- члены семьи не видели списки друг друга. Теперь это таблица с RLS и
+-- realtime, как products и product_events.
+-- Уже выполняли v1-v4? Пересоздавать всё не нужно — выполните только этот блок.
+-- ---------------------------------------------------------------------------
+
+create table if not exists regulars (
+  id uuid primary key default gen_random_uuid(),
+  household_code text not null references households(code) on delete cascade,
+  name text not null,
+  category text not null,
+  created_at timestamptz default now()
+);
+
+create index if not exists regulars_household_idx on regulars (household_code);
+
+alter table regulars enable row level security;
+
+drop policy if exists "members can view regulars of their household" on regulars;
+create policy "members can view regulars of their household" on regulars
+  for select using (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = regulars.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "members can add regulars to their household" on regulars;
+create policy "members can add regulars to their household" on regulars
+  for insert with check (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = regulars.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "members can delete regulars of their household" on regulars;
+create policy "members can delete regulars of their household" on regulars
+  for delete using (
+    exists (
+      select 1 from household_members hm
+      where hm.household_code = regulars.household_code and hm.user_id = auth.uid()
+    )
+  );
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'regulars'
+  ) then
+    alter publication supabase_realtime add table regulars;
+  end if;
+end $$;

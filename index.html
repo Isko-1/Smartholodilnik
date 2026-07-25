@@ -43,9 +43,8 @@
 <!-- Lucide icons -->
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
-<!-- Supabase (реальный бэкенд для семейной синхронизации, опционально) -->
+<!-- Supabase (бэкенд для семейной синхронизации — обязателен, см. config.js) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
 
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -376,40 +375,8 @@
     </div>
   </section>
 
-  <!-- Family access: локальный демо-режим (переключатель-симуляция) -->
-  <section id="family-local" class="bg-white/70 border border-bone-dark rounded-2xl p-4 sm:p-5">
-    <div class="flex items-center justify-between gap-4">
-      <div class="flex items-start gap-3">
-        <div class="w-9 h-9 shrink-0 rounded-xl bg-cognac/15 flex items-center justify-center">
-          <i data-lucide="users" class="w-4.5 h-4.5 text-cognac-dark"></i>
-        </div>
-        <div>
-          <h2 class="font-display font-semibold text-base">Семейный доступ</h2>
-          <p id="family-status-text" class="text-xs text-navy/50 mt-0.5"></p>
-        </div>
-      </div>
-      <div class="relative flex items-center gap-2 shrink-0">
-        <span id="family-sync-pulse" class="hidden absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-sage"></span>
-        <button
-          id="family-toggle"
-          role="switch"
-          aria-checked="true"
-          class="relative w-11 h-6 rounded-full transition-colors bg-cognac"
-        >
-          <span class="absolute top-0.5 translate-x-5 w-5 h-5 bg-white rounded-full shadow transition-transform"></span>
-        </button>
-      </div>
-    </div>
-    <p class="text-xs text-navy/40 mt-3 pl-12">
-      Каждый добавленный или съеденный продукт мгновенно появляется у остальных членов семьи — все видят один и тот же холодильник.
-    </p>
-    <p class="text-[11px] text-cognac-dark/70 mt-2 pl-12">
-      Это демо-переключатель на одном устройстве. Чтобы включить настоящую синхронизацию между телефонами — см. README.
-    </p>
-  </section>
-
-  <!-- Family access: реальный бэкенд (код семьи + участники онлайн) -->
-  <section id="family-backend" class="hidden bg-white/70 border border-bone-dark rounded-2xl p-4 sm:p-5">
+  <!-- Family access: код семьи + участники онлайн (Supabase realtime presence) -->
+  <section id="family-backend" class="bg-white/70 border border-bone-dark rounded-2xl p-4 sm:p-5">
     <div class="flex items-start gap-3">
       <div class="w-9 h-9 shrink-0 rounded-xl bg-sage/15 flex items-center justify-center">
         <i data-lucide="wifi" class="w-4.5 h-4.5 text-sage"></i>
@@ -551,7 +518,6 @@
   </div>
 </div>
 
-<script src="recipes.js"></script>
-<script src="app.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>
