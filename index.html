@@ -75,14 +75,15 @@
 <div id="auth-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center auth-bg p-4">
   <div class="auth-blob auth-blob-cognac" aria-hidden="true"></div>
   <div class="auth-blob auth-blob-plum" aria-hidden="true"></div>
-  <div class="auth-card relative bg-bone/80 w-full max-w-sm rounded-3xl p-6">
+  <div class="shine-border-wrap w-full max-w-sm">
+  <div class="auth-card relative bg-bone/90 w-full rounded-[calc(1.5rem-1.5px)] p-6">
     <div class="w-11 h-11 rounded-2xl bg-cognac/15 flex items-center justify-center mb-3">
       <i data-lucide="lock" class="w-5 h-5 text-cognac-dark"></i>
     </div>
 
     <!-- Шаг: вход / регистрация -->
     <div id="auth-step-credentials">
-      <h2 class="font-display font-semibold text-xl mb-1">Добро пожаловать</h2>
+      <h2 class="font-display font-semibold text-xl mb-1 auth-title-shine">Добро пожаловать</h2>
       <p class="text-sm text-navy/55 mb-4">Войдите в аккаунт, чтобы холодильник синхронизировался у всей семьи на любых устройствах.</p>
 
       <div class="flex gap-2 mb-4 bg-bone-dark/60 p-1 rounded-xl text-sm font-medium">
@@ -106,7 +107,7 @@
         </div>
         <p id="auth-error" class="hidden text-xs text-terracotta"></p>
         <p id="auth-info" class="hidden text-xs text-sage"></p>
-        <button type="submit" class="w-full bg-navy hover:bg-navy/90 text-bone font-medium text-sm rounded-xl px-5 py-3 flex items-center justify-center gap-1.5 transition-colors">
+        <button type="submit" class="shimmer-btn ripple-btn w-full bg-navy hover:bg-navy/90 text-bone font-medium text-sm rounded-xl px-5 py-3 flex items-center justify-center gap-1.5 transition-colors">
           <span id="auth-submit-label">Войти</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </button>
@@ -163,6 +164,8 @@
       </form>
     </div>
   </div>
+  </div>
+  <!-- /shine-border-wrap -->
 </div>
 
 <!-- Onboarding: вход в семью (шаг 2 — после успешной авторизации) -->

@@ -264,6 +264,30 @@ function showAuthStep(step) {
   });
 }
 
+// Перезапускает CSS-анимацию blur-fade на элементе (аналог MagicUI Blur Fade
+// без React: снимаем класс, форсируем reflow, ставим обратно).
+function restartBlurFade(el) {
+  if (!el) return;
+  el.classList.remove("blur-fade-swap");
+  void el.offsetWidth;
+  el.classList.add("blur-fade-swap");
+}
+
+// Волна от клика на кнопке (аналог MagicUI Ripple Button без React).
+function spawnRipple(button, event) {
+  if (!button) return;
+  const rect = button.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const ink = document.createElement("span");
+  ink.className = "ripple-ink";
+  ink.style.width = `${size}px`;
+  ink.style.height = `${size}px`;
+  ink.style.left = `${(event.clientX ?? rect.left + rect.width / 2) - rect.left - size / 2}px`;
+  ink.style.top = `${(event.clientY ?? rect.top + rect.height / 2) - rect.top - size / 2}px`;
+  button.appendChild(ink);
+  ink.addEventListener("animationend", () => ink.remove());
+}
+
 function setAuthTab(tab) {
   state.authTab = tab;
   const loginBtn = document.getElementById("auth-tab-login");
@@ -289,6 +313,7 @@ function setAuthTab(tab) {
   if (submitLabel) submitLabel.textContent = tab === "login" ? "Войти" : "Зарегистрироваться";
   if (errorEl) errorEl.classList.add("hidden");
   if (infoEl) infoEl.classList.add("hidden");
+  restartBlurFade(document.getElementById("auth-form"));
 }
 
 function showAuthScreen() {
@@ -311,6 +336,11 @@ function hideAuthScreen() {
 export function initAuthUI() {
   safeAddListener("auth-tab-login", "click", () => setAuthTab("login"));
   safeAddListener("auth-tab-signup", "click", () => setAuthTab("signup"));
+
+  const authSubmitBtn = document.querySelector("#auth-form button[type=submit]");
+  if (authSubmitBtn) {
+    authSubmitBtn.addEventListener("click", (ev) => spawnRipple(authSubmitBtn, ev));
+  }
 
   safeAddListener("auth-form", "submit", (e) => {
     e.preventDefault();
