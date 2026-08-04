@@ -523,22 +523,57 @@ function checkExpiryNotifications() {
   try { notifiedToday = JSON.parse(localStorage.getItem(NOTIFIED_LOG_KEY)) || {}; } catch (e) {}
   if (notifiedToday.date !== today) notifiedToday = { date: today, ids: [] };
 
+  // Просроченные и почти просроченные (red) — самое срочное.
+  const overdue = state.products.filter(p => {
+    const { daysLeft, status } = getExpiry(p);
+    return status === "red" && daysLeft < 0 && !notifiedToday.ids.includes(p.id);
+  });
+  // Ещё не просрочены, но пора съесть (red, 0-1 день).
   const urgent = state.products.filter(p => {
     const { daysLeft, status } = getExpiry(p);
     return status === "red" && daysLeft >= 0 && !notifiedToday.ids.includes(p.id);
   });
-  if (urgent.length === 0) return;
+  // Скоро испортятся (yellow, 2-3 дня) — мягкое напоминание заранее.
+  const upcoming = state.products.filter(p => {
+    const { status } = getExpiry(p);
+    return status === "yellow" && !notifiedToday.ids.includes(p.id);
+  });
 
-  const body = urgent.length === 1
-    ? `${urgent[0].name} скоро испортится — самое время его съесть.`
-    : `${urgent.length} продукта(ов) скоро испортятся: ${urgent.slice(0, 3).map(p => p.name).join(", ")}${urgent.length > 3 ? "…" : ""}`;
-  new Notification("Умный холодильник", { body, icon: "https://api.iconify.design/lucide/refrigerator.svg" });
+  const notifiedIds = [];
 
-  notifiedToday.ids.push(...urgent.map(p => p.id));
+  if (overdue.length > 0) {
+    const body = overdue.length === 1
+      ? `${overdue[0].name} уже просрочен — проверьте и выбросьте, если нужно.`
+      : `${overdue.length} продукта(ов) просрочены: ${overdue.slice(0, 3).map(p => p.name).join(", ")}${overdue.length > 3 ? "…" : ""}`;
+    new Notification("Умный холодильник", { body, icon: "https://api.iconify.design/lucide/refrigerator.svg" });
+    notifiedIds.push(...overdue.map(p => p.id));
+  }
+
+  if (urgent.length > 0) {
+    const body = urgent.length === 1
+      ? `${urgent[0].name} скоро испортится — самое время его съесть.`
+      : `${urgent.length} продукта(ов) скоро испортятся: ${urgent.slice(0, 3).map(p => p.name).join(", ")}${urgent.length > 3 ? "…" : ""}`;
+    new Notification("Умный холодильник", { body, icon: "https://api.iconify.design/lucide/refrigerator.svg" });
+    notifiedIds.push(...urgent.map(p => p.id));
+  }
+
+  if (upcoming.length > 0) {
+    const body = upcoming.length === 1
+      ? `${upcoming[0].name} испортится через пару дней — спланируйте, что с ним сделать.`
+      : `${upcoming.length} продукта(ов) испортятся через пару дней: ${upcoming.slice(0, 3).map(p => p.name).join(", ")}${upcoming.length > 3 ? "…" : ""}`;
+    new Notification("Умный холодильник", { body, icon: "https://api.iconify.design/lucide/refrigerator.svg" });
+    notifiedIds.push(...upcoming.map(p => p.id));
+  }
+
+  if (notifiedIds.length === 0) return;
+  notifiedToday.ids.push(...notifiedIds);
   localStorage.setItem(NOTIFIED_LOG_KEY, JSON.stringify(notifiedToday));
 }
 
 export function startNotifyPolling() {
   renderNotifyToggle();
+  // Проверяем сразу при открытии приложения (не ждём первого 15-минутного тика),
+  // с небольшой задержкой, чтобы state.products успел загрузиться из Supabase.
+  setTimeout(checkExpiryNotifications, 3000);
   setInterval(checkExpiryNotifications, 15 * 60 * 1000);
 }
