@@ -142,17 +142,38 @@ export async function enterHousehold(code, name) {
   if (subtitleEl) subtitleEl.textContent = `Семья: ${state.householdCode}`;
 
   showModeBanner("connecting");
+  // Данные (продукты/регулярные покупки) грузятся обычным REST-запросом —
+  // если он падает, показываем настоящую ошибку: без него холодильник пуст.
+  let dataLoaded = false;
   try {
     await fetchProductsFromBackend();
-    await subscribeToProductChanges();
     await fetchRegularsFromBackend();
-    await subscribeToRegularsChanges();
-    await subscribeToPresence();
-    showModeBanner("connected");
+    dataLoaded = true;
   } catch (err) {
     console.error(err);
     showModeBanner("error");
   }
+
+  // Realtime-подписки (WebSocket) — только для живой синхронизации между
+  // устройствами семьи. На некоторых мобильных сетях/браузерах (например,
+  // Chrome с включённой «Экономией трафика») WebSocket-подключение может не
+  // проходить через сжимающий прокси, хотя обычные HTTPS-запросы работают.
+  // Раньше падение любой из этих подписок красило весь баннер в «ошибка»,
+  // даже если продукты уже успешно загрузились — это вводило в заблуждение.
+  // Теперь такие сбои только логируются в консоль, не перекрывая уже
+  // загруженные данные красным баннером.
+  if (dataLoaded) {
+    try {
+      await subscribeToProductChanges();
+      await subscribeToRegularsChanges();
+      await subscribeToPresence();
+      showModeBanner("connected");
+    } catch (err) {
+      console.error("Realtime-подписка не установилась (живая синхронизация может не работать):", err);
+      showModeBanner("connected");
+    }
+  }
+
   renderRegulars();
   render();
 }
@@ -452,7 +473,29 @@ export function initAuthUI() {
 // ---------------------------------------------------------------------------
 // Обработка авторизации
 // ---------------------------------------------------------------------------
+// На загрузке страницы Supabase может вызвать onAuthStateChange("SIGNED_IN")
+// и getSession().then(...) почти одновременно для уже залогиненного
+// пользователя — это документированная особенность supabase-js, а не баг
+// в этом коде. Без защиты это запускает handleAuthenticated()/enterHousehold()
+// дважды параллельно: оба раза создаются одинаковые realtime-каналы
+// (products-changes-CODE, regulars-changes-CODE, presence-CODE), и на более
+// медленной мобильной сети параллельные вызовы чаще сталкиваются друг с
+// другом — один из них падает с ошибкой, и баннер показывает «база не
+// подключена», хотя данные из первого (успешного) вызова уже отрисовались.
+// authHandlingPromise дедуплицирует повторные вызовы, пока первый не завершится.
+let authHandlingPromise = null;
+
 export async function handleAuthenticated(user, session) {
+  if (authHandlingPromise) return authHandlingPromise;
+  authHandlingPromise = runHandleAuthenticated(user, session);
+  try {
+    await authHandlingPromise;
+  } finally {
+    authHandlingPromise = null;
+  }
+}
+
+async function runHandleAuthenticated(user, session) {
   state.currentUser = user;
   hideAuthScreen();
 
