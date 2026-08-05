@@ -9,7 +9,7 @@ import {
 // ---------------------------------------------------------------------------
 // Баннер состояния подключения
 // ---------------------------------------------------------------------------
-export function showModeBanner(state_) {
+export function showModeBanner(state_, detail) {
   const el = document.getElementById("mode-banner");
   if (!el) return;
   el.classList.remove("hidden");
@@ -19,7 +19,8 @@ export function showModeBanner(state_) {
   } else if (state_ === "connected") {
     el.classList.add("hidden");
   } else if (state_ === "error") {
-    el.textContent = "Не удалось подключиться к базе данных. Проверьте SUPABASE_CONFIG в config.js.";
+    const base = "Не удалось подключиться к базе данных.";
+    el.textContent = detail ? `${base} (${detail})` : `${base} Проверьте SUPABASE_CONFIG в config.js.`;
     el.className = "text-xs sm:text-sm px-4 py-2.5 text-center font-medium bg-terracotta/15 text-terracotta";
   }
 }
