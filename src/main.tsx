@@ -8,9 +8,13 @@ const rootElement = document.getElementById('react-auth-shine')
 if (rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      <ShineBorder color={["#A07CFE", "#FE8FB5", "#FFBE7B"]}>
-        {/* Здесь ваш UI или содержимое */}
-      </ShineBorder>
+      <div className="relative flex h-[100px] w-full flex-col items-center justify-center overflow-hidden rounded-lg border bg-background md:shadow-xl">
+        <ShineBorder color={["#A07CFE", "#FE8FB5", "#FFBE7B"]}>
+          <span className="pointer-events-none whitespace-pre-wrap bg-gradient-to-b from-black to-gray-300 bg-clip-text text-center text-xl font-semibold leading-none text-transparent dark:from-white dark:to-slate-900">
+            React-РѕСЃС‚СЂРѕРІ СЃ Shine Border СЂР°Р±РѕС‚Р°РµС‚!
+          </span>
+        </ShineBorder>
+      </div>
     </React.StrictMode>
   )
 }
