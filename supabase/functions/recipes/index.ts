@@ -74,25 +74,54 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
 
     if (body.action === "search") {
-      const ingredients = (Array.isArray(body.ingredients) ? body.ingredients : [])
-        .slice(0, 10)
-        .join(",");
+      const ingredientsList = (Array.isArray(body.ingredients) ? body.ingredients : []).slice(0, 10);
+      const ingredients = ingredientsList.join(",");
       if (!ingredients) return json({ recipes: [] });
 
-      const apiUrl = `https://api.spoonacular.com/recipes/findByIngredients` +
-        `?apiKey=${SPOONACULAR_KEY}&ingredients=${encodeURIComponent(ingredients)}` +
-        `&number=6&ranking=2&ignorePantry=true`;
+      const ppMode = !!body.ppMode;
+
+      // В режиме ПП используем complexSearch: он умеет фильтровать по калориям/белку
+      // и сортировать по «healthiness» — findByIngredients этого не умеет.
+      const apiUrl = ppMode
+        ? `https://api.spoonacular.com/recipes/complexSearch` +
+          `?apiKey=${SPOONACULAR_KEY}&includeIngredients=${encodeURIComponent(ingredients)}` +
+          `&number=6&sort=healthiness&maxCalories=600&minProtein=15` +
+          `&fillIngredients=true&instructionsRequired=true`
+        : `https://api.spoonacular.com/recipes/findByIngredients` +
+          `?apiKey=${SPOONACULAR_KEY}&ingredients=${encodeURIComponent(ingredients)}` +
+          `&number=6&ranking=2&ignorePantry=true`;
+
       const res = await fetch(apiUrl);
       const data = await res.json();
       if (!res.ok) return json({ error: data?.message || "Ошибка Spoonacular API" }, 200);
 
-      const recipes = (Array.isArray(data) ? data : []).map((r: any) => ({
-        id: r.id,
-        title: r.title,
-        image: r.image,
-        usedIngredients: (r.usedIngredients || []).map((i: any) => i.name),
-        missedIngredients: (r.missedIngredients || []).map((i: any) => i.name),
-      }));
+      let recipes;
+      if (ppMode) {
+        const results = Array.isArray(data.results) ? data.results : [];
+        const lowerIngredients = ingredientsList.map((i: string) => String(i).toLowerCase());
+        recipes = results.map((r: any) => {
+          const extIngredients = (r.extendedIngredients || []).map((i: any) => i.name || i.originalName || "").filter(Boolean);
+          const used = extIngredients.filter((name: string) =>
+            lowerIngredients.some((ing: string) => name.toLowerCase().includes(ing) || ing.includes(name.toLowerCase()))
+          );
+          const missed = extIngredients.filter((name: string) => !used.includes(name));
+          return {
+            id: r.id,
+            title: r.title,
+            image: r.image,
+            usedIngredients: used,
+            missedIngredients: missed.slice(0, 3),
+          };
+        });
+      } else {
+        recipes = (Array.isArray(data) ? data : []).map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          image: r.image,
+          usedIngredients: (r.usedIngredients || []).map((i: any) => i.name),
+          missedIngredients: (r.missedIngredients || []).map((i: any) => i.name),
+        }));
+      }
       return json({ recipes });
     }
 

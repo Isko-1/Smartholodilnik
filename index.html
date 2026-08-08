@@ -471,9 +471,22 @@
           <p id="recipe-source-note" class="text-[11px] text-navy/40 leading-tight"></p>
         </div>
       </div>
-      <button id="recipe-modal-close" class="text-navy/40 hover:text-navy transition-colors">
-        <i data-lucide="x" class="w-5 h-5"></i>
-      </button>
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          id="pp-mode-toggle"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          title="Режим ПП — показывать только полезные рецепты"
+          class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full border bg-bone-dark/40 border-bone-dark text-navy/40 transition-colors"
+        >
+          <i data-lucide="salad" class="w-3.5 h-3.5"></i>
+          ПП
+        </button>
+        <button id="recipe-modal-close" class="text-navy/40 hover:text-navy transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
     </div>
     <div id="recipe-results" class="p-5 space-y-3 overflow-y-auto"></div>
   </div>
@@ -524,3 +537,5 @@
 <script type="module" src="main.js"></script>
 </body>
 </html>
+<div id="react-auth-shine"></div>
+<script type="module" src="/src/main.tsx"></script>

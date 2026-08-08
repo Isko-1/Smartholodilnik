@@ -1,9 +1,10 @@
 import { state } from "./state.js";
 import { CATEGORIES, STATUS_META, getExpiry, fillCategoryOptions } from "./categories.js";
-import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal } from "./utils.js";
+import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal, animateCountUp } from "./utils.js";
 import { logEvent } from "./history.js";
 import { openRecipesFor } from "./recipes.js";
 import { openDeliveryFor } from "./delivery.js";
+import confetti from "canvas-confetti";
 
 // ---------------------------------------------------------------------------
 // Операции с продуктами (только через Supabase — без демо-режима)
@@ -256,9 +257,12 @@ function renderStats() {
   const elYellow = document.getElementById("stat-yellow");
   const elGreen = document.getElementById("stat-green");
 
-  if (elRed) elRed.textContent = counts.red;
-  if (elYellow) elYellow.textContent = counts.yellow;
-  if (elGreen) elGreen.textContent = counts.green;
+  animateCountUp(elRed, counts.red);
+  animateCountUp(elYellow, counts.yellow);
+  animateCountUp(elGreen, counts.green);
+
+  const cookBtnWrap = document.getElementById("cook-btn-wrap");
+  if (cookBtnWrap) cookBtnWrap.classList.toggle("beam-active", counts.red > 0);
 }
 
 function renderGrid() {
@@ -277,6 +281,7 @@ function renderGrid() {
     const cat = CATEGORIES[product.category] || CATEGORIES.other;
     const { daysLeft, status } = getExpiry(product);
     const meta = STATUS_META[status];
+    const pct = Math.max(0, Math.min(1, daysLeft / cat.days));
 
     const card = document.createElement("div");
     card.className = "group relative flex flex-col bg-white/80 rounded-2xl shadow-sm border border-bone-dark overflow-hidden hover:bg-bone-dark/70 hover:border-navy/25 hover:shadow-lg transition-all duration-200 list-item-in";
@@ -297,8 +302,10 @@ function renderGrid() {
       <div class="flex items-stretch">
         <div class="w-2.5 shrink-0 status-strip${meta.pulse ? " status-strip-urgent" : ""}" style="--status-color:${meta.ring}"></div>
         <div class="flex-1 flex items-center gap-3 p-3.5">
-          <div class="relative w-12 h-12 shrink-0 rounded-xl flex items-center justify-center" style="background:${cat.color}22">
-            <i data-lucide="${cat.icon}" class="w-6 h-6" style="color:${cat.color}"></i>
+          <div class="relative w-12 h-12 shrink-0 freshness-ring" style="--pct:${pct};--status-color:${meta.ring}">
+            <div class="w-full h-full rounded-xl flex items-center justify-center" style="background:${cat.color}22">
+              <i data-lucide="${cat.icon}" class="w-6 h-6" style="color:${cat.color}"></i>
+            </div>
           </div>
           <div class="flex-1 min-w-0">
             <p class="font-display font-semibold text-navy truncate">${escapeHtml(product.name)}</p>

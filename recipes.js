@@ -15,6 +15,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Легко",
     servings: 2,
     nutrition: { calories: 320, protein: 28, fat: 12, carbs: 22 },
+    pp: true,
     ingredients: ["курица", "куриц", "морковь", "перец", "лук", "брокколи", "соевый соус"],
     steps: [
       "Нарежьте курицу тонкими полосками, обжарьте на сильном огне 5 минут.",
@@ -29,6 +30,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Легко",
     servings: 3,
     nutrition: { calories: 260, protein: 8, fat: 9, carbs: 36 },
+    pp: false,
     ingredients: ["молоко", "яйцо", "яйца", "мука", "масло сливочное"],
     steps: [
       "Смешайте молоко, яйца и муку до однородности венчиком.",
@@ -43,6 +45,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Средне",
     servings: 4,
     nutrition: { calories: 210, protein: 7, fat: 6, carbs: 33 },
+    pp: true,
     ingredients: ["яблоко", "яблоки", "овсянка", "молоко", "яйцо", "яйца", "корица"],
     steps: [
       "Нарежьте яблоки тонкими дольками и выложите на дно формы.",
@@ -57,6 +60,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Легко",
     servings: 2,
     nutrition: { calories: 280, protein: 30, fat: 10, carbs: 14 },
+    pp: true,
     ingredients: ["рыба", "лосось", "треска", "лимон", "кабачок", "морковь", "брокколи"],
     steps: [
       "Приправьте рыбу солью, перцем и лимонным соком.",
@@ -71,6 +75,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Легко",
     servings: 4,
     nutrition: { calories: 120, protein: 3, fat: 4, carbs: 18 },
+    pp: true,
     ingredients: ["картофель", "морковь", "лук", "капуста", "помидор", "перец", "кабачок"],
     steps: [
       "Обжарьте лук и морковь на масле 3–4 минуты.",
@@ -85,6 +90,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Средне",
     servings: 4,
     nutrition: { calories: 230, protein: 16, fat: 9, carbs: 21 },
+    pp: true,
     ingredients: ["творог", "яйцо", "яйца", "манка", "сметана", "изюм"],
     steps: [
       "Смешайте творог, яйца и манку до однородной массы.",
@@ -99,6 +105,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Средне",
     servings: 3,
     nutrition: { calories: 420, protein: 27, fat: 18, carbs: 34 },
+    pp: false,
     ingredients: ["говядина", "мясо", "картофель", "лук", "морковь"],
     steps: [
       "Обжарьте кусочки говядины до румяной корочки.",
@@ -113,6 +120,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Легко",
     servings: 1,
     nutrition: { calories: 190, protein: 9, fat: 4, carbs: 30 },
+    pp: true,
     ingredients: ["йогурт", "банан", "яблоко", "яблоки", "ягоды", "мёд"],
     steps: [
       "Нарежьте фрукты небольшими кусочками.",
@@ -127,6 +135,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Легко",
     servings: 1,
     nutrition: { calories: 310, protein: 21, fat: 23, carbs: 3 },
+    pp: true,
     ingredients: ["яйцо", "яйца", "сыр", "молоко", "зелень"],
     steps: [
       "Взбейте яйца с молоком и щепоткой соли.",
@@ -141,6 +150,7 @@ const RECIPE_LIBRARY = [
     difficulty: "Легко",
     servings: 1,
     nutrition: { calories: 240, protein: 11, fat: 10, carbs: 26 },
+    pp: false,
     ingredients: ["хлеб", "батон", "помидор", "сыр", "масло сливочное"],
     steps: [
       "Слегка обжарьте хлеб на сухой сковороде или в тостере.",
@@ -153,13 +163,16 @@ const RECIPE_LIBRARY = [
 /**
  * Подбирает рецепты по списку «срочных» и «скоро истекающих» продуктов.
  * @param {{name:string, status:'red'|'yellow'|'green'}[]} products
+ * @param {{ppOnly?: boolean}} [options] — ppOnly ограничивает подбор рецептами режима «ПП»
  * @returns {Array<{recipe:object, matched:string[], score:number}>}
  */
-function matchRecipes(products) {
+function matchRecipes(products, options = {}) {
+  const { ppOnly = false } = options;
   const priority = products.filter(p => p.status === "red" || p.status === "yellow");
   if (priority.length === 0) return [];
 
-  const scored = RECIPE_LIBRARY.map(recipe => {
+  const library = ppOnly ? RECIPE_LIBRARY.filter(r => r.pp) : RECIPE_LIBRARY;
+  const scored = library.map(recipe => {
     const matched = new Set();
     let score = 0;
     priority.forEach(p => {
@@ -178,6 +191,47 @@ function matchRecipes(products) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
 }
+
+// ---------------------------------------------------------------------------
+// Режим «ПП» (правильное питание) — фильтр, который оставляет только
+// более полезные рецепты (белок/овощи, без белой муки и избытка сахара).
+// Состояние живёт в state.ppMode и переживает перезагрузку страницы через localStorage.
+// ---------------------------------------------------------------------------
+const PP_MODE_KEY = "smart-fridge-pp-mode";
+
+function loadPpMode() {
+  try { return localStorage.getItem(PP_MODE_KEY) === "1"; }
+  catch (e) { return false; }
+}
+
+function savePpMode(value) {
+  try { localStorage.setItem(PP_MODE_KEY, value ? "1" : "0"); } catch (e) {}
+}
+
+state.ppMode = loadPpMode();
+
+/** Переключает режим ПП и повторно открывает рецепты для последнего запроса. */
+export function togglePpMode() {
+  state.ppMode = !state.ppMode;
+  savePpMode(state.ppMode);
+  updatePpToggleUi();
+  openRecipesFor(state.lastRecipePriority || []);
+  return state.ppMode;
+}
+
+function updatePpToggleUi() {
+  const btn = document.getElementById("pp-mode-toggle");
+  if (!btn) return;
+  btn.classList.toggle("bg-sage/15", state.ppMode);
+  btn.classList.toggle("border-sage", state.ppMode);
+  btn.classList.toggle("text-sage", state.ppMode);
+  btn.classList.toggle("bg-bone-dark/40", !state.ppMode);
+  btn.classList.toggle("border-bone-dark", !state.ppMode);
+  btn.classList.toggle("text-navy/40", !state.ppMode);
+  btn.setAttribute("aria-checked", state.ppMode ? "true" : "false");
+}
+
+safeAddListener("pp-mode-toggle", "click", togglePpMode);
 
 // ---------------------------------------------------------------------------
 // Избранные рецепты
@@ -258,6 +312,10 @@ export function renderFavoritesPage() {
  */
 export async function openRecipesFor(priority) {
   openModal();
+  updatePpToggleUi();
+
+  if (priority && priority.length > 0) state.lastRecipePriority = priority;
+  priority = priority && priority.length > 0 ? priority : state.lastRecipePriority;
 
   if (!priority || priority.length === 0) {
     showRecipeSourceNote("");
@@ -269,22 +327,29 @@ export async function openRecipesFor(priority) {
     renderRecipesLoading();
     try {
       const { data, error } = await state.sb.functions.invoke("recipes", {
-        body: { action: "search", ingredients: priority.map(p => p.name) }
+        body: { action: "search", ingredients: priority.map(p => p.name), ppMode: state.ppMode }
       });
       if (error) throw error;
       if (data && data.recipes && data.recipes.length > 0) {
-        showRecipeSourceNote("База рецептов: Spoonacular");
+        showRecipeSourceNote(state.ppMode ? "База рецептов: Spoonacular · режим ПП" : "База рецептов: Spoonacular");
         renderApiRecipes(data.recipes);
         return;
+      }
+      if (data && data.recipes && data.recipes.length === 0 && state.ppMode) {
+        showRecipeSourceNote("Среди полезных рецептов Spoonacular ничего не нашлось — показываем локальную подборку");
       }
     } catch (err) {
       console.warn("Spoonacular недоступен, показываем локальную подборку:", err.message);
     }
   }
 
-  showRecipeSourceNote("");
+  if (!state.ppMode) {
+    showRecipeSourceNote("");
+  } else if (!document.getElementById("recipe-source-note")?.textContent) {
+    showRecipeSourceNote("Локальная подборка · режим ПП");
+  }
   const withStatus = priority.map(p => ({ name: p.name, status: getExpiry(p).status }));
-  renderRecipes(matchRecipes(withStatus));
+  renderRecipes(matchRecipes(withStatus, { ppOnly: state.ppMode }));
 }
 
 function showRecipeSourceNote(text) {
@@ -429,6 +494,7 @@ function renderRecipes(matches) {
       <div class="flex items-start justify-between gap-3">
         <h3 class="font-display font-semibold text-lg text-navy">${escapeHtml(recipe.title)}</h3>
         <div class="flex items-center gap-1.5 shrink-0">
+          ${recipe.pp ? `<span class="text-[11px] font-medium px-2 py-1 rounded-full bg-sage/15 text-sage whitespace-nowrap">ПП</span>` : ""}
           <span class="text-[11px] font-mono px-2 py-1 rounded-full bg-cognac/15 text-cognac-dark whitespace-nowrap">${score} балл${score === 1 ? "" : "а"}</span>
           ${favoriteBtnHtml(recipe.id, isFavoriteRecipe(recipe.id))}
         </div>

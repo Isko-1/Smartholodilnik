@@ -27,6 +27,32 @@ export function formatQty(quantity, unit) {
   return `${rounded} ${unit || "шт"}`;
 }
 
+/**
+ * Плавно «докручивает» числовое значение в элементе до нового —
+ * vanilla-аналог Number Ticker из MagicUI (без зависимости от motion/framer-motion).
+ * Если значение не меняется или элемент отсутствует — просто выходит.
+ */
+export function animateCountUp(el, newValue, duration = 500) {
+  if (!el) return;
+  const from = Number(el.dataset.countValue ?? el.textContent) || 0;
+  const to = Number(newValue) || 0;
+  if (from === to) {
+    el.textContent = to;
+    el.dataset.countValue = to;
+    return;
+  }
+  el.dataset.countValue = to;
+  const start = performance.now();
+  const ease = t => 1 - Math.pow(1 - t, 3); // easeOutCubic — мягкое замедление в конце, как у spring в MagicUI
+  function tick(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const value = Math.round(from + (to - from) * ease(progress));
+    el.textContent = value;
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
 export function escapeHtml(str) {
   if (!str) return "";
   const div = document.createElement("div");

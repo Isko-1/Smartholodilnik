@@ -5,6 +5,8 @@
   --bone: #F5EFE6;
   --bone-dark: #EAE1D2;
   --terracotta: #BC4B34;
+  --sage: #6E9075;
+  --amber: #D6A24C;
   --plum: #6B4C7A;
   --plum-light: #EFE3F3;
 }
@@ -172,8 +174,8 @@ html, body {
    Свежедобавленная карточка получает более заметный акцент.
 --------------------------------------------------------------------------- */
 @keyframes list-item-in {
-  0%   { opacity: 0; transform: translateY(-10px) scale(0.98); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0%   { opacity: 0; filter: blur(4px); transform: translateY(-10px) scale(0.98); }
+  100% { opacity: 1; filter: blur(0); transform: translateY(0) scale(1); }
 }
 .list-item-in {
   animation: list-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -403,4 +405,83 @@ select:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   .card-urgent-glow { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Кольцо свежести на иконке категории — vanilla-аналог Animated Circular
+   Progress Bar из MagicUI: conic-gradient показывает, сколько % срока
+   годности осталось (--pct и --status-color выставляются inline в JS,
+   см. products.js, renderGrid()). Появляется с лёгким "докручиванием".
+--------------------------------------------------------------------------- */
+.freshness-ring {
+  padding: 3px;
+  border-radius: 9999px;
+  background: conic-gradient(var(--status-color) calc(var(--pct, 1) * 360deg), var(--bone-dark) 0deg);
+  animation: freshness-ring-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes freshness-ring-in {
+  0%   { background: conic-gradient(var(--bone-dark) 0deg, var(--bone-dark) 0deg); }
+  100% { background: conic-gradient(var(--status-color) calc(var(--pct, 1) * 360deg), var(--bone-dark) 0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .freshness-ring { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Бегущий по контуру блик — vanilla-аналог Border Beam из MagicUI.
+   Оборачивает кнопку "Что приготовить?": включается классом .beam-active,
+   когда в холодильнике есть срочные (red) продукты — см. products.js.
+--------------------------------------------------------------------------- */
+.beam-border-wrap {
+  position: relative;
+  border-radius: 9999px;
+  padding: 2px;
+}
+.beam-border-wrap.beam-active::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    var(--amber, #D6A24C) 6%,
+    transparent 16%,
+    transparent 100%
+  );
+  animation: shine-rotate 2.4s linear infinite;
+  border-radius: 9999px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .beam-border-wrap.beam-active::before { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Маркер-хайлайтер — vanilla-аналог Highlighter из MagicUI (без rough-notation):
+   за текстом "ПП" "проявляется" неровный мазок маркера, как будто обведено
+   от руки. Используется в recipes.js для бейджа полезных рецептов.
+--------------------------------------------------------------------------- */
+.pp-highlight {
+  position: relative;
+  display: inline-block;
+  padding: 1px 7px;
+  font-weight: 600;
+  color: #2f4a35;
+  z-index: 0;
+}
+.pp-highlight::before {
+  content: "";
+  position: absolute;
+  inset: -1px -3px;
+  z-index: -1;
+  background: color-mix(in srgb, var(--sage) 45%, transparent);
+  border-radius: 3px 8px 5px 9px / 8px 4px 9px 3px;
+  transform: rotate(-1.4deg) scaleX(0);
+  transform-origin: left center;
+  animation: pp-highlight-draw 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+@keyframes pp-highlight-draw {
+  to { transform: rotate(-1.4deg) scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-highlight::before { animation: none; transform: rotate(-1.4deg) scaleX(1); }
 }
