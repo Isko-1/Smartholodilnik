@@ -116,3 +116,40 @@ export function closeSmallModal(modalId) {
   if (panel) panel.classList.add("translate-y-6", "opacity-0");
   setTimeout(() => modal.classList.add("hidden"), 200);
 }
+
+// ---------------------------------------------------------------------------
+// Тост с отменой действия: показывает сообщение с кнопкой «Отменить» на время
+// duration; если не отменили — вызывает onCommit, если отменили — onUndo.
+// Один активный тост за раз — новый вызов сразу закрывает предыдущий (без отмены).
+// Ограничение: если страницу закрыли/перезагрузили до истечения таймера —
+// onCommit не вызовется, т.е. удаление в Supabase не произойдёт; это приемлемо для MVP.
+// ---------------------------------------------------------------------------
+let undoToastTimer = null;
+
+export function showUndoToast(message, { onUndo, onCommit, duration = 5000 } = {}) {
+  const root = document.getElementById("toast-root");
+  if (!root) { onCommit?.(); return; }
+
+  if (undoToastTimer) clearTimeout(undoToastTimer);
+  root.innerHTML = "";
+
+  const toast = document.createElement("div");
+  toast.className = "pointer-events-auto bg-navy text-bone text-sm rounded-full pl-4 pr-2 py-2 flex items-center gap-3 shadow-xl list-item-in";
+  toast.innerHTML = `
+    <span>${escapeHtml(message)}</span>
+    <button type="button" class="undo-toast-btn font-semibold text-cognac hover:text-white transition-colors px-2.5 py-1 rounded-full hover:bg-white/10">Отменить</button>
+  `;
+  root.appendChild(toast);
+
+  let done = false;
+  const finish = (commit) => {
+    if (done) return;
+    done = true;
+    root.innerHTML = "";
+    undoToastTimer = null;
+    if (commit) onCommit?.(); else onUndo?.();
+  };
+
+  toast.querySelector(".undo-toast-btn").addEventListener("click", () => finish(false));
+  undoToastTimer = setTimeout(() => finish(true), duration);
+}

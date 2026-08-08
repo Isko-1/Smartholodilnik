@@ -43,20 +43,46 @@ export async function addProduct(name, category, quantity = 1, unit = "шт", ex
   }
 }
 
-export async function removeProduct(id, reason = null) {
-  const product = state.products.find(p => p.id === id);
+export async function removeProduct(id, reason = null, productOverride = null) {
+  const product = productOverride || state.products.find(p => p.id === id);
   if (!product) return;
 
   const { error } = await state.sb.from("products").delete().eq("id", id);
   if (error) {
     console.error(error);
     alert("Не удалось удалить продукт. Проверьте подключение.");
+    // Если удаление было оптимистичным (undo-тост) и откатилось в Supabase —
+    // возвращаем продукт в UI, чтобы он не пропал бесследно.
+    if (productOverride && !state.products.find(p => p.id === id)) {
+      state.products.push(product);
+      render();
+    }
     return;
   }
   state.products = state.products.filter(p => p.id !== id);
   await logEvent(product.name, product.category, "removed", reason);
   clearRecipeCache();
   render();
+}
+
+/**
+ * Убирает продукт из UI сразу (оптимистично) и показывает undo-тост.
+ * Реальное удаление в Supabase (removeProduct) запускается только если не отменили.
+ */
+function scheduleRemove(id, reason) {
+  const product = state.products.find(p => p.id === id);
+  if (!product) return;
+
+  state.products = state.products.filter(p => p.id !== id);
+  render();
+
+  showUndoToast(`«${product.name}» ${reason === "eaten" ? "съеден" : "выброшен"}`, {
+    onUndo: () => {
+      state.products.push(product);
+      render();
+    },
+    onCommit: () => removeProduct(id, reason, product)
+  });
 }
 
 /**
