@@ -427,33 +427,6 @@ select:focus-visible {
   .freshness-ring { animation: none; }
 }
 
-/* ---------------------------------------------------------------------------
-   Бегущий по контуру блик — vanilla-аналог Border Beam из MagicUI.
-   Оборачивает кнопку "Что приготовить?": включается классом .beam-active,
-   когда в холодильнике есть срочные (red) продукты — см. products.js.
---------------------------------------------------------------------------- */
-.beam-border-wrap {
-  position: relative;
-  border-radius: 9999px;
-  padding: 2px;
-}
-.beam-border-wrap.beam-active::before {
-  content: "";
-  position: absolute;
-  inset: -40%;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0%,
-    var(--amber, #D6A24C) 6%,
-    transparent 16%,
-    transparent 100%
-  );
-  animation: shine-rotate 2.4s linear infinite;
-  border-radius: 9999px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .beam-border-wrap.beam-active::before { animation: none; }
-}
 
 /* ---------------------------------------------------------------------------
    Маркер-хайлайтер — vanilla-аналог Highlighter из MagicUI (без rough-notation):

@@ -22,16 +22,22 @@
   },
   "homepage": "https://github.com/Isko-1/Smartholodilnik#readme",
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^26.2.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.5",
-    "autoprefixer": "^10.5.4",
-    "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.1"
   },
   "dependencies": {
-    "canvas-confetti": "^1.9.4"
+    "canvas-confetti": "^1.9.4",
+    "clsx": "^2.1.1",
+    "motion": "^12.4.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.0.2"
   }
 }

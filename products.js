@@ -1,6 +1,6 @@
 import { state } from "./state.js";
 import { CATEGORIES, STATUS_META, getExpiry, fillCategoryOptions } from "./categories.js";
-import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal, animateCountUp } from "./utils.js";
+import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal } from "./utils.js";
 import { logEvent } from "./history.js";
 import { openRecipesFor, clearRecipeCache } from "./recipes.js";
 import { openDeliveryFor } from "./delivery.js";
@@ -257,16 +257,10 @@ function renderStats() {
   const counts = { red: 0, yellow: 0, green: 0 };
   state.products.forEach(p => counts[getExpiry(p).status]++);
 
-  const elRed = document.getElementById("stat-red");
-  const elYellow = document.getElementById("stat-yellow");
-  const elGreen = document.getElementById("stat-green");
-
-  animateCountUp(elRed, counts.red);
-  animateCountUp(elYellow, counts.yellow);
-  animateCountUp(elGreen, counts.green);
-
-  const cookBtnWrap = document.getElementById("cook-btn-wrap");
-  if (cookBtnWrap) cookBtnWrap.classList.toggle("beam-active", counts.red > 0);
+  // Цифры и beam-подсветка кнопки теперь рендерятся React'ом (StatsTicker/CookBeam,
+  // src/main.tsx) — они не знают про ванильный state, поэтому просто слушают эти события.
+  window.dispatchEvent(new CustomEvent("fridge:stats", { detail: counts }));
+  window.dispatchEvent(new CustomEvent("fridge:urgent", { detail: counts.red > 0 }));
 }
 
 function renderGrid() {
