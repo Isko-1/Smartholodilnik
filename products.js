@@ -2,7 +2,7 @@ import { state } from "./state.js";
 import { CATEGORIES, STATUS_META, getExpiry, fillCategoryOptions } from "./categories.js";
 import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal, animateCountUp } from "./utils.js";
 import { logEvent } from "./history.js";
-import { openRecipesFor } from "./recipes.js";
+import { openRecipesFor, clearRecipeCache } from "./recipes.js";
 import { openDeliveryFor } from "./delivery.js";
 import confetti from "canvas-confetti";
 
@@ -38,6 +38,7 @@ export async function addProduct(name, category, quantity = 1, unit = "шт", ex
     state.products.push(mapProductRow(data));
     state.lastAddedId = data.id;
     logEvent(data.name, data.category, "added");
+    clearRecipeCache();
     render();
   }
 }
@@ -54,6 +55,7 @@ export async function removeProduct(id, reason = null) {
   }
   state.products = state.products.filter(p => p.id !== id);
   await logEvent(product.name, product.category, "removed", reason);
+  clearRecipeCache();
   render();
 }
 
@@ -98,9 +100,11 @@ export async function subscribeToProductChanges() {
         const row = payload.new;
         if (!state.products.find(p => p.id === row.id)) {
           state.products.push(mapProductRow(row));
+          clearRecipeCache();
         }
       } else if (payload.eventType === "DELETE") {
         state.products = state.products.filter(p => p.id !== payload.old.id);
+        clearRecipeCache();
       } else if (payload.eventType === "UPDATE") {
         const idx = state.products.findIndex(p => p.id === payload.new.id);
         if (idx >= 0) state.products[idx] = mapProductRow(payload.new);

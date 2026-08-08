@@ -102,7 +102,7 @@ const RECIPE_LIBRARY = [
     id: "beef-mash",
     title: "Тушёная говядина с картофельным пюре",
     time: "50 мин",
-    difficulty: "Средне",
+    difficulty: "Сложно",
     servings: 3,
     nutrition: { calories: 420, protein: 27, fat: 18, carbs: 34 },
     pp: false,
@@ -210,6 +210,44 @@ function savePpMode(value) {
 
 state.ppMode = loadPpMode();
 
+// ---------------------------------------------------------------------------
+// Кэш ответов Spoonacular — переживает перезагрузку страницы через localStorage.
+// Ключ = набор ингредиентов + режим ПП, поэтому повторный запрос с тем же
+// набором продуктов (например, переключение ПП туда-обратно или повторное
+// открытие модалки) берётся из кэша и не тратит вызов API.
+// ---------------------------------------------------------------------------
+const RECIPE_CACHE_KEY = "smart-fridge-recipe-cache";
+const RECIPE_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 часов
+
+function recipeCacheKey(ingredientNames, ppMode) {
+  const names = ingredientNames.map(n => n.toLowerCase()).sort().join("|");
+  return `${ppMode ? "pp" : "all"}::${names}`;
+}
+
+function loadRecipeCache() {
+  try { return JSON.parse(localStorage.getItem(RECIPE_CACHE_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+
+function getCachedRecipes(key) {
+  const entry = loadRecipeCache()[key];
+  if (!entry || Date.now() - entry.ts > RECIPE_CACHE_TTL_MS) return null;
+  return entry.recipes;
+}
+
+function setCachedRecipes(key, recipes) {
+  const cache = loadRecipeCache();
+  cache[key] = { recipes, ts: Date.now() };
+  try { localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify(cache)); } catch (e) {}
+}
+
+/** Очищает весь кэш рецептов — вызывается при любом добавлении/удалении
+ * продукта, чтобы старые рецепты не оставались в кэше после того,
+ * как набор продуктов в холодильнике изменился. */
+export function clearRecipeCache() {
+  try { localStorage.removeItem(RECIPE_CACHE_KEY); } catch (e) {}
+}
+
 /** Переключает режим ПП и повторно открывает рецепты для последнего запроса. */
 export function togglePpMode() {
   state.ppMode = !state.ppMode;
@@ -247,8 +285,10 @@ function saveFavoriteRecipes(list) {
   try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(list)); } catch (e) {}
 }
 
-function isFavoriteRecipe(id) {
-  return loadFavoriteRecipes().some(r => String(r.id) === String(id));
+/** Множество id избранных рецептов — считать один раз на весь список карточек,
+ * а не читать localStorage отдельно на каждую карточку. */
+function favoriteIdSet() {
+  return new Set(loadFavoriteRecipes().map(r => String(r.id)));
 }
 
 function toggleFavoriteRecipe(recipe) {
@@ -324,22 +364,33 @@ export async function openRecipesFor(priority) {
   }
 
   if (state.sb && state.currentUser) {
-    renderRecipesLoading();
-    try {
-      const { data, error } = await state.sb.functions.invoke("recipes", {
-        body: { action: "search", ingredients: priority.map(p => p.name), ppMode: state.ppMode }
-      });
-      if (error) throw error;
-      if (data && data.recipes && data.recipes.length > 0) {
-        showRecipeSourceNote(state.ppMode ? "База рецептов: Spoonacular · режим ПП" : "База рецептов: Spoonacular");
-        renderApiRecipes(data.recipes);
-        return;
+    const cacheKey = recipeCacheKey(priority.map(p => p.name), state.ppMode);
+    const cached = getCachedRecipes(cacheKey);
+    if (cached) {
+      showRecipeSourceNote(state.ppMode ? "База рецептов: Spoonacular · режим ПП" : "База рецептов: Spoonacular");
+      if (cached.length > 0) { renderApiRecipes(cached); return; }
+      if (state.ppMode) showRecipeSourceNote("Среди полезных рецептов Spoonacular ничего не нашлось — показываем локальную подборку");
+    } else {
+      renderRecipesLoading();
+      try {
+        const { data, error } = await state.sb.functions.invoke("recipes", {
+          body: { action: "search", ingredients: priority.map(p => p.name), ppMode: state.ppMode }
+        });
+        if (error) throw error;
+        if (data && data.recipes) {
+          setCachedRecipes(cacheKey, data.recipes);
+          if (data.recipes.length > 0) {
+            showRecipeSourceNote(state.ppMode ? "База рецептов: Spoonacular · режим ПП" : "База рецептов: Spoonacular");
+            renderApiRecipes(data.recipes);
+            return;
+          }
+          if (state.ppMode) {
+            showRecipeSourceNote("Среди полезных рецептов Spoonacular ничего не нашлось — показываем локальную подборку");
+          }
+        }
+      } catch (err) {
+        console.warn("Spoonacular недоступен, показываем локальную подборку:", err.message);
       }
-      if (data && data.recipes && data.recipes.length === 0 && state.ppMode) {
-        showRecipeSourceNote("Среди полезных рецептов Spoonacular ничего не нашлось — показываем локальную подборку");
-      }
-    } catch (err) {
-      console.warn("Spoonacular недоступен, показываем локальную подборку:", err.message);
     }
   }
 
@@ -368,9 +419,19 @@ function renderRecipesLoading() {
   if (window.lucide) lucide.createIcons();
 }
 
+/** Оценивает сложность рецепта из Spoonacular по числу недостающих ингредиентов —
+ * эти данные уже приходят в ответе поиска, дополнительный запрос к API не нужен. */
+function apiDifficultyLabel(recipe) {
+  const missed = (recipe.missedIngredients || []).length;
+  if (missed <= 1) return "Легко";
+  if (missed <= 3) return "Средне";
+  return "Сложно";
+}
+
 function renderApiRecipes(recipes) {
   const recipeResults = document.getElementById("recipe-results");
   if (!recipeResults) return;
+  const favIds = favoriteIdSet();
 
   recipeResults.innerHTML = recipes.map((r, i) => `
     <div class="border border-bone-dark rounded-2xl overflow-hidden bg-bone/60 list-item-in" style="animation-delay:${Math.min(i, 6) * 50}ms" data-recipe-id="${r.id}">
@@ -378,12 +439,13 @@ function renderApiRecipes(recipes) {
         ${r.image ? `<img src="${escapeHtml(r.image)}" alt="" class="w-16 h-16 rounded-xl object-cover shrink-0 bg-bone-dark">` : ""}
         <div class="flex-1 min-w-0">
           <h3 class="font-display font-semibold text-base text-navy leading-snug">${escapeHtml(r.title)}</h3>
+          <p class="flex items-center gap-1 mt-1 text-xs text-navy/50"><i data-lucide="gauge" class="w-3.5 h-3.5"></i>${apiDifficultyLabel(r)}</p>
           <div class="flex flex-wrap gap-1.5 mt-2">
             ${(r.usedIngredients || []).map(m => `<span class="text-[11px] px-2 py-0.5 rounded-full bg-sage/15 text-sage font-medium">${escapeHtml(m)}</span>`).join("")}
             ${(r.missedIngredients || []).slice(0, 3).map(m => `<span class="text-[11px] px-2 py-0.5 rounded-full bg-navy/10 text-navy/50 font-medium">+ ${escapeHtml(m)}</span>`).join("")}
           </div>
         </div>
-        ${favoriteBtnHtml(r.id, isFavoriteRecipe(r.id))}
+        ${favoriteBtnHtml(r.id, favIds.has(String(r.id)))}
       </div>
       <button class="recipe-expand-btn w-full text-xs font-medium text-cognac-dark border-t border-bone-dark py-2.5 hover:bg-bone-dark/30 transition-colors" data-id="${r.id}">
         Показать рецепт
@@ -489,14 +551,15 @@ function renderRecipes(matches) {
     return;
   }
 
+  const favIds = favoriteIdSet();
+
   recipeResults.innerHTML = matches.map(({ recipe, matched, score }, i) => `
     <div class="border border-bone-dark rounded-2xl p-4 bg-bone/60 list-item-in" style="animation-delay:${Math.min(i, 6) * 50}ms">
       <div class="flex items-start justify-between gap-3">
         <h3 class="font-display font-semibold text-lg text-navy">${escapeHtml(recipe.title)}</h3>
         <div class="flex items-center gap-1.5 shrink-0">
           ${recipe.pp ? `<span class="text-[11px] font-medium px-2 py-1 rounded-full bg-sage/15 text-sage whitespace-nowrap">ПП</span>` : ""}
-          <span class="text-[11px] font-mono px-2 py-1 rounded-full bg-cognac/15 text-cognac-dark whitespace-nowrap">${score} балл${score === 1 ? "" : "а"}</span>
-          ${favoriteBtnHtml(recipe.id, isFavoriteRecipe(recipe.id))}
+          ${favoriteBtnHtml(recipe.id, favIds.has(String(recipe.id)))}
         </div>
       </div>
       <div class="flex items-center gap-3 mt-1.5 text-xs text-navy/50">

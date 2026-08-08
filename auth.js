@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import { safeAddListener, escapeHtml, withBusy } from "./utils.js";
+import { safeAddListener, escapeHtml, withBusy, uuid } from "./utils.js";
 import {
   fetchProductsFromBackend, subscribeToProductChanges,
   fetchRegularsFromBackend, subscribeToRegularsChanges, renderRegulars,
@@ -34,6 +34,16 @@ function generateHouseholdCode() {
 
 function currentRedirectUrl() {
   return window.location.origin + window.location.pathname;
+}
+
+/** Переключает визуально активную вкладку в паре кнопок-переключателей (создать/присоединиться, вход/регистрация) —
+ * обе пары используют один и тот же набор классов. */
+function setActiveTabButtons(activeBtn, inactiveBtn) {
+  if (!activeBtn || !inactiveBtn) return;
+  activeBtn.classList.add("bg-white", "shadow-sm", "text-navy");
+  activeBtn.classList.remove("text-navy/50");
+  inactiveBtn.classList.remove("bg-white", "shadow-sm", "text-navy");
+  inactiveBtn.classList.add("text-navy/50");
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +96,7 @@ async function subscribeToPresence() {
     await state.sb.removeChannel(state.presenceChannelRef);
     state.presenceChannelRef = null;
   }
-  const memberId = state.currentUser ? state.currentUser.id : crypto.randomUUID();
+  const memberId = state.currentUser ? state.currentUser.id : uuid();
   const presenceChannel = state.sb.channel(`presence-${state.householdCode}`, {
     config: { presence: { key: memberId } }
   });
@@ -185,17 +195,7 @@ function setTab(tab) {
   const joinField = document.getElementById("join-code-field");
   const submitLabel = document.getElementById("onboarding-submit-label");
 
-  if (createBtn && joinBtn) {
-    createBtn.classList.toggle("bg-white", tab === "create");
-    createBtn.classList.toggle("shadow-sm", tab === "create");
-    createBtn.classList.toggle("text-navy", tab === "create");
-    createBtn.classList.toggle("text-navy/50", tab !== "create");
-
-    joinBtn.classList.toggle("bg-white", tab === "join");
-    joinBtn.classList.toggle("shadow-sm", tab === "join");
-    joinBtn.classList.toggle("text-navy", tab === "join");
-    joinBtn.classList.toggle("text-navy/50", tab !== "join");
-  }
+  setActiveTabButtons(tab === "create" ? createBtn : joinBtn, tab === "create" ? joinBtn : createBtn);
 
   if (joinField) joinField.classList.toggle("hidden", tab !== "join");
   if (submitLabel) submitLabel.textContent = tab === "create" ? "Создать и войти" : "Присоединиться";
@@ -319,17 +319,7 @@ function setAuthTab(tab) {
   const errorEl = document.getElementById("auth-error");
   const infoEl = document.getElementById("auth-info");
 
-  if (loginBtn && signupBtn) {
-    loginBtn.classList.toggle("bg-white", tab === "login");
-    loginBtn.classList.toggle("shadow-sm", tab === "login");
-    loginBtn.classList.toggle("text-navy", tab === "login");
-    loginBtn.classList.toggle("text-navy/50", tab !== "login");
-
-    signupBtn.classList.toggle("bg-white", tab === "signup");
-    signupBtn.classList.toggle("shadow-sm", tab === "signup");
-    signupBtn.classList.toggle("text-navy", tab === "signup");
-    signupBtn.classList.toggle("text-navy/50", tab !== "signup");
-  }
+  setActiveTabButtons(tab === "login" ? loginBtn : signupBtn, tab === "login" ? signupBtn : loginBtn);
 
   if (pwdInput) pwdInput.autocomplete = tab === "login" ? "current-password" : "new-password";
   if (submitLabel) submitLabel.textContent = tab === "login" ? "Войти" : "Зарегистрироваться";
