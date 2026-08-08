@@ -1,7 +1,7 @@
 import { state } from "./state.js";
 import { CATEGORIES, STATUS_META, getExpiry, fillCategoryOptions } from "./categories.js";
 import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal } from "./utils.js";
-import { logEvent } from "./history.js";
+import { logEvent, fetchRegularIntervals } from "./history.js";
 import { openRecipesFor, clearRecipeCache } from "./recipes.js";
 import { openDeliveryFor } from "./delivery.js";
 import confetti from "canvas-confetti";
@@ -132,6 +132,12 @@ export async function fetchRegularsFromBackend() {
     .order("created_at", { ascending: true });
   if (error) throw error;
   state.regulars = data.map(mapRegularRow);
+  // Не блокируем загрузку regulars, если интервалы не считаются —
+  // это вторичная подсказка, не критичный путь загрузки.
+  fetchRegularIntervals().then(intervals => {
+    state.regularIntervals = intervals;
+    renderRegulars();
+  }).catch(err => console.error("Не удалось посчитать интервалы регуляров:", err));
 }
 
 export async function subscribeToRegularsChanges() {
@@ -195,6 +201,8 @@ export function renderRegulars() {
 
   regularList.innerHTML = state.regulars.map(item => {
     const cat = CATEGORIES[item.category] || CATEGORIES.other;
+    const avgDays = state.regularIntervals[item.name.trim().toLowerCase()];
+    const intervalHint = avgDays ? ` · обычно через ~${avgDays} дн.` : "";
     return `
       <div class="flex items-center gap-3 bg-bone/60 border border-bone-dark rounded-xl px-3 py-2.5">
         <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center" style="background:${cat.color}22">
@@ -202,7 +210,7 @@ export function renderRegulars() {
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-navy truncate">${escapeHtml(item.name)}</p>
-          <p class="text-xs text-navy/45">${cat.label}</p>
+          <p class="text-xs text-navy/45">${cat.label}${intervalHint}</p>
         </div>
         <button data-id="${item.id}" class="regular-add-btn shrink-0 bg-navy/5 hover:bg-cognac hover:text-white text-navy text-xs font-medium rounded-lg px-3 py-1.5 flex items-center gap-1 transition-colors">
           <i data-lucide="plus" class="w-3.5 h-3.5"></i>В холодильник
@@ -254,8 +262,14 @@ export function render() {
 }
 
 function renderStats() {
-  const counts = { red: 0, yellow: 0, green: 0 };
-  state.products.forEach(p => counts[getExpiry(p).status]++);
+  // overdue — подмножество red (daysLeft ≤ 1), но считаем отдельно то, что уже
+  // просрочено (daysLeft < 0), чтобы отличать от «съесть сегодня» в интерфейсе.
+  const counts = { red: 0, yellow: 0, green: 0, overdue: 0 };
+  state.products.forEach(p => {
+    const { status, daysLeft } = getExpiry(p);
+    counts[status]++;
+    if (daysLeft < 0) counts.overdue++;
+  });
 
   // Цифры и beam-подсветка кнопки теперь рендерятся React'ом (StatsTicker/CookBeam,
   // src/main.tsx) — они не знают про ванильный state, поэтому просто слушают эти события.

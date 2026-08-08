@@ -15,6 +15,7 @@ export const state = {
   currentTab: "create",
   products: [],
   regulars: [],
+  regularIntervals: {},   // { [название_в_нижнем_регистре]: среднийИнтервалВДнях } — из истории покупок
   lastAddedId: null,
   ppMode: false,           // режим «ПП» (правильное питание) — фактическое значение выставляется в recipes.js из localStorage
   lastRecipePriority: []   // список продуктов последнего запроса рецептов — нужен, чтобы пересчитывать при переключении ПП

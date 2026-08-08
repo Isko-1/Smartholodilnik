@@ -35,6 +35,39 @@ export async function fetchEventsForHistory() {
 }
 
 // ---------------------------------------------------------------------------
+// Средний интервал между покупками каждого названия — считается из уже существующего
+// лога product_events (action = 'added'), без новых таблиц/колонок. Используется для
+// подсказки в списке регулярных покупок (products.js, renderRegulars).
+// ---------------------------------------------------------------------------
+export async function fetchRegularIntervals() {
+  const { data, error } = await state.sb
+    .from("product_events")
+    .select("product_name, occurred_at")
+    .eq("household_code", state.householdCode)
+    .eq("action", "added")
+    .order("occurred_at", { ascending: true });
+  if (error) {
+    console.error("Не удалось загрузить интервалы покупок:", error);
+    return {};
+  }
+
+  const byName = {};
+  data.forEach(row => {
+    const key = row.product_name.trim().toLowerCase();
+    (byName[key] ??= []).push(new Date(row.occurred_at).getTime());
+  });
+
+  const intervals = {};
+  for (const [name, timestamps] of Object.entries(byName)) {
+    if (timestamps.length < 2) continue; // нужно минимум 2 покупки, чтобы считать интервал
+    const gaps = timestamps.slice(1).map((t, i) => t - timestamps[i]);
+    const avgMs = gaps.reduce((sum, g) => sum + g, 0) / gaps.length;
+    intervals[name] = Math.round(avgMs / (24 * 60 * 60 * 1000));
+  }
+  return intervals;
+}
+
+// ---------------------------------------------------------------------------
 // История: рендер таймлайна
 // ---------------------------------------------------------------------------
 const HISTORY_ACTION_META = {
