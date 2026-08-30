@@ -96,6 +96,7 @@ export async function renderHistoryPage() {
   if (window.lucide) lucide.createIcons();
 
   const events = await fetchEventsForHistory();
+  renderWasteStats(events);
   if (emptyEl) emptyEl.classList.toggle("hidden", events.length > 0);
   if (events.length === 0) {
     listEl.innerHTML = "";
@@ -136,4 +137,29 @@ export async function renderHistoryPage() {
     </div>
   `).join("");
   if (window.lucide) lucide.createIcons();
+}
+
+// ---------------------------------------------------------------------------
+// Статистика съедено/выброшено за последние 30 дней — чистый подсчёт по
+// уже загруженным событиям (events из renderHistoryPage), без отдельного запроса.
+// ---------------------------------------------------------------------------
+function renderWasteStats(events) {
+  const section = document.getElementById("waste-stats");
+  if (!section) return;
+
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const removed = events.filter(ev => ev.action === "removed" && ev.at >= cutoff);
+  if (removed.length === 0) {
+    section.classList.add("hidden");
+    return;
+  }
+
+  const eaten = removed.filter(ev => ev.reason === "eaten").length;
+  const discarded = removed.filter(ev => ev.reason === "discarded").length;
+  const percent = Math.round((eaten / removed.length) * 100);
+
+  document.getElementById("waste-stats-eaten").textContent = eaten;
+  document.getElementById("waste-stats-discarded").textContent = discarded;
+  document.getElementById("waste-stats-percent").textContent = `${percent}%`;
+  section.classList.remove("hidden");
 }

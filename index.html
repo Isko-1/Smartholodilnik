@@ -245,6 +245,7 @@
     <h2 class="font-display font-semibold text-base mb-3 flex items-center gap-2">
       <i data-lucide="repeat" class="w-4.5 h-4.5 text-cognac"></i>
       Нужно покупать регулярно
+      <span id="regular-needed-badge" class="hidden text-[11px] font-mono font-semibold bg-terracotta/15 text-[#8f3623] rounded-full px-2 py-0.5 ml-auto"></span>
     </h2>
     <form id="regular-form" class="flex flex-col sm:flex-row gap-2.5 mb-3">
       <input
@@ -272,15 +273,27 @@
 
   <!-- Fridge -->
   <section>
-    <h2 class="font-display font-semibold text-base mb-3 flex items-center gap-2">
-      <i data-lucide="layers" class="w-4.5 h-4.5 text-cognac"></i>
-      Ваш холодильник
-    </h2>
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <h2 class="font-display font-semibold text-base flex items-center gap-2">
+        <i data-lucide="layers" class="w-4.5 h-4.5 text-cognac"></i>
+        Ваш холодильник
+      </h2>
+    </div>
+    <div class="relative mb-3">
+      <i data-lucide="search" class="w-4 h-4 text-navy/35 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+      <input
+        id="fridge-search"
+        type="search"
+        placeholder="Найти продукт..."
+        class="w-full bg-white/70 border border-bone-dark rounded-xl pl-9 pr-3.5 py-2.5 text-sm placeholder:text-navy/35 focus:border-cognac transition-colors"
+      >
+    </div>
     <div id="fridge-grid" class="space-y-2.5"></div>
     <div id="empty-state" class="hidden text-center py-12 border border-dashed border-bone-dark rounded-2xl">
       <i data-lucide="refrigerator" class="w-9 h-9 mx-auto text-navy/25 mb-2"></i>
       <p class="text-navy/50 text-sm">Холодильник пуст — добавьте первый продукт выше</p>
     </div>
+    <p id="fridge-search-empty" class="hidden text-center py-8 text-navy/45 text-sm">Ничего не нашлось по запросу</p>
   </section>
 
 </div>
@@ -293,6 +306,23 @@
     История
   </h1>
   <p class="text-sm text-navy/50 -mt-2">Что покупали, съели и выбросили</p>
+  <section id="waste-stats" class="hidden bg-white/70 border border-bone-dark rounded-2xl p-4 sm:p-5">
+    <p class="text-xs text-navy/45 mb-2.5">За последние 30 дней</p>
+    <div class="grid grid-cols-3 gap-3 text-center">
+      <div>
+        <p id="waste-stats-eaten" class="font-display font-semibold text-xl text-sage">0</p>
+        <p class="text-[11px] text-navy/50 mt-0.5">Съедено</p>
+      </div>
+      <div>
+        <p id="waste-stats-discarded" class="font-display font-semibold text-xl text-terracotta">0</p>
+        <p class="text-[11px] text-navy/50 mt-0.5">Выброшено</p>
+      </div>
+      <div>
+        <p id="waste-stats-percent" class="font-display font-semibold text-xl text-navy">—</p>
+        <p class="text-[11px] text-navy/50 mt-0.5">Съедаемость</p>
+      </div>
+    </div>
+  </section>
   <div id="history-list" class="space-y-5"></div>
   <div id="history-empty" class="hidden text-center py-12 border border-dashed border-bone-dark rounded-2xl">
     <i data-lucide="history" class="w-9 h-9 mx-auto text-navy/25 mb-2"></i>

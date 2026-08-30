@@ -1,6 +1,6 @@
 import { state } from "./state.js";
 import { CATEGORIES, STATUS_META, getExpiry, fillCategoryOptions } from "./categories.js";
-import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal } from "./utils.js";
+import { safeAddListener, escapeHtml, formatQty, attachTiltEffect, withBusy, openSmallModal, closeSmallModal, showUndoToast } from "./utils.js";
 import { logEvent, fetchRegularIntervals } from "./history.js";
 import { openRecipesFor, clearRecipeCache } from "./recipes.js";
 import { openDeliveryFor } from "./delivery.js";
@@ -221,22 +221,34 @@ async function removeRegular(id) {
 export function renderRegulars() {
   const regularList = document.getElementById("regular-list");
   const regularEmpty = document.getElementById("regular-empty");
+  const neededBadge = document.getElementById("regular-needed-badge");
   if (!regularList) return;
 
   if (regularEmpty) regularEmpty.classList.toggle("hidden", state.regulars.length > 0);
 
+  // «Нужно купить» — regular, которого сейчас нет в холодильнике (по имени).
+  // Простое множественное вычитание, без отдельной таблицы/статуса.
+  const inFridgeNames = new Set(state.products.map(p => p.name.trim().toLowerCase()));
+  const neededCount = state.regulars.filter(item => !inFridgeNames.has(item.name.trim().toLowerCase())).length;
+  if (neededBadge) {
+    neededBadge.classList.toggle("hidden", neededCount === 0);
+    neededBadge.textContent = `Купить: ${neededCount}`;
+  }
+
   regularList.innerHTML = state.regulars.map(item => {
     const cat = CATEGORIES[item.category] || CATEGORIES.other;
-    const avgDays = state.regularIntervals[item.name.trim().toLowerCase()];
+    const nameKey = item.name.trim().toLowerCase();
+    const avgDays = state.regularIntervals[nameKey];
     const intervalHint = avgDays ? ` · обычно через ~${avgDays} дн.` : "";
+    const needsBuy = !inFridgeNames.has(nameKey);
     return `
-      <div class="flex items-center gap-3 bg-bone/60 border border-bone-dark rounded-xl px-3 py-2.5">
+      <div class="flex items-center gap-3 bg-bone/60 border ${needsBuy ? "border-terracotta/30" : "border-bone-dark"} rounded-xl px-3 py-2.5">
         <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center" style="background:${cat.color}22">
           <i data-lucide="${cat.icon}" class="w-4.5 h-4.5" style="color:${cat.color}"></i>
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-navy truncate">${escapeHtml(item.name)}</p>
-          <p class="text-xs text-navy/45">${cat.label}${intervalHint}</p>
+          <p class="text-xs ${needsBuy ? "text-terracotta font-medium" : "text-navy/45"}">${needsBuy ? "Нужно купить" : cat.label}${intervalHint}</p>
         </div>
         <button data-id="${item.id}" class="regular-add-btn shrink-0 bg-navy/5 hover:bg-cognac hover:text-white text-navy text-xs font-medium rounded-lg px-3 py-1.5 flex items-center gap-1 transition-colors">
           <i data-lucide="plus" class="w-3.5 h-3.5"></i>В холодильник
@@ -283,6 +295,7 @@ safeAddListener("regular-form", "submit", (e) => {
 export function render() {
   renderStats();
   renderGrid();
+  renderRegulars();
   if (window.lucide) lucide.createIcons();
   checkExpiryNotifications();
 }
@@ -303,14 +316,30 @@ function renderStats() {
   window.dispatchEvent(new CustomEvent("fridge:urgent", { detail: counts.red > 0 }));
 }
 
+// Поиск по холодильнику — только локальная фильтрация уже загруженного state.products,
+// не влияет на статистику (renderStats считает весь холодильник, а не видимый список).
+let fridgeSearchQuery = "";
+safeAddListener("fridge-search", "input", (e) => {
+  fridgeSearchQuery = e.target.value.trim().toLowerCase();
+  renderGrid();
+  if (window.lucide) lucide.createIcons();
+});
+
 function renderGrid() {
   const fridgeGrid = document.getElementById("fridge-grid");
   const emptyState = document.getElementById("empty-state");
+  const searchEmpty = document.getElementById("fridge-search-empty");
   if (!fridgeGrid) return;
 
-  const sorted = [...state.products].sort((a, b) => getExpiry(a).daysLeft - getExpiry(b).daysLeft);
+  const visible = fridgeSearchQuery
+    ? state.products.filter(p => p.name.toLowerCase().includes(fridgeSearchQuery))
+    : state.products;
+  const sorted = [...visible].sort((a, b) => getExpiry(a).daysLeft - getExpiry(b).daysLeft);
   fridgeGrid.innerHTML = "";
-  if (emptyState) emptyState.classList.toggle("hidden", sorted.length > 0);
+
+  const hasAnyProducts = state.products.length > 0;
+  if (emptyState) emptyState.classList.toggle("hidden", hasAnyProducts);
+  if (searchEmpty) searchEmpty.classList.toggle("hidden", !(hasAnyProducts && fridgeSearchQuery && sorted.length === 0));
 
   const justAddedId = state.lastAddedId;
   state.lastAddedId = null;
@@ -462,16 +491,16 @@ function openRemoveReasonModal(id) {
   openSmallModal("remove-reason-modal");
 }
 
-safeAddListener("remove-reason-eaten", "click", (e) => withBusy(e.currentTarget, async () => {
-  if (pendingRemoveId) await removeProduct(pendingRemoveId, "eaten");
+safeAddListener("remove-reason-eaten", "click", () => {
+  if (pendingRemoveId) scheduleRemove(pendingRemoveId, "eaten");
   pendingRemoveId = null;
   closeSmallModal("remove-reason-modal");
-}));
-safeAddListener("remove-reason-discarded", "click", (e) => withBusy(e.currentTarget, async () => {
-  if (pendingRemoveId) await removeProduct(pendingRemoveId, "discarded");
+});
+safeAddListener("remove-reason-discarded", "click", () => {
+  if (pendingRemoveId) scheduleRemove(pendingRemoveId, "discarded");
   pendingRemoveId = null;
   closeSmallModal("remove-reason-modal");
-}));
+});
 safeAddListener("remove-reason-cancel", "click", () => {
   pendingRemoveId = null;
   closeSmallModal("remove-reason-modal");
