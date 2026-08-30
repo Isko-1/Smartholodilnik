@@ -1,23 +1,21 @@
-import { useEffect, useState } from "react"
-import { BorderBeam } from "./magicui/border-beam"
+import { useEffect, useState } from "react";
+import { BorderBeam } from "./magicui/border-beam";
 
 /**
- * Слушает событие `fridge:urgent` (products.js, renderStats) и подсвечивает
- * кнопку "Что приготовить?" бегущим бордером, когда в холодильнике есть
- * товары в статусе red. Монтируется в #cook-beam-root — отдельный узел
- * *внутри* существующей кнопки #cook-btn, а не поверх неё, чтобы не сносить
- * ванильный onClick-обработчик, который уже на неё повешен в main.js.
+ * Подсветка по контуру кнопки "Что приготовить?" — включается, когда в
+ * холодильнике есть срочные (red) продукты. products.js дёргает
+ * window.dispatchEvent(new CustomEvent("fridge:urgent", { detail: boolean })).
  */
 export function CookBeam() {
-  const [urgent, setUrgent] = useState(false)
+  const [active, setActive] = useState(false);
 
   useEffect(() => {
-    const onUrgent = (e: Event) => setUrgent(Boolean((e as CustomEvent<boolean>).detail))
-    window.addEventListener("fridge:urgent", onUrgent)
-    return () => window.removeEventListener("fridge:urgent", onUrgent)
-  }, [])
+    const onUrgent = (e: Event) => setActive(Boolean((e as CustomEvent<boolean>).detail));
+    window.addEventListener("fridge:urgent", onUrgent);
+    return () => window.removeEventListener("fridge:urgent", onUrgent);
+  }, []);
 
-  if (!urgent) return null
+  if (!active) return null;
 
-  return <BorderBeam size={70} duration={3} colorFrom="#BC4B34" colorTo="#D6A24C" />
+  return <BorderBeam size={40} duration={2.4} colorFrom="#D6A24C" colorTo="#BC4B34" />;
 }
